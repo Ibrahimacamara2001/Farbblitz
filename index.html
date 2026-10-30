@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Farbblitz">
+  <meta name="theme-color" content="#0f1020">
+  <title>Farbblitz</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main id="app">
+
+    <!-- Startmenü -->
+    <section id="screen-menu" class="screen active">
+      <h1 class="logo">Farb<span>blitz</span></h1>
+      <p class="tagline">Schnapp dir die Zielfarbe – drei in einer Reihe!</p>
+
+      <div class="group">
+        <div class="label">Spieler</div>
+        <div class="seg" id="seg-players">
+          <button data-v="1" class="on">Solo</button>
+          <button data-v="2">2</button>
+          <button data-v="3">3</button>
+          <button data-v="4">4</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="label">Schwierigkeit</div>
+        <div class="seg" id="seg-diff">
+          <button data-v="0" class="on">Leicht</button>
+          <button data-v="1">Mittel</button>
+          <button data-v="2">Schwer</button>
+        </div>
+      </div>
+
+      <button class="big primary" id="btn-start">Spielen</button>
+      <button class="big ghost" id="btn-howto">So geht's</button>
+      <div class="best" id="best"></div>
+    </section>
+
+    <!-- Anleitung -->
+    <section id="screen-howto" class="screen">
+      <h2>So geht's</h2>
+      <ol class="howto">
+        <li>Oben steht die <b>Zielfarbe</b>.</li>
+        <li>Auf dem 3×3-Feld blitzen Felder in zufälligen Farben auf.</li>
+        <li>Tippe ein Feld, <b>während</b> es in der Zielfarbe leuchtet – es wird dir gutgeschrieben.</li>
+        <li>Verbinde drei Felder zu einer <b>Reihe</b> (waagrecht, senkrecht oder diagonal), so schnell du kannst.</li>
+        <li>Falscher Tipp = Fehler. Nach <b>3 Fehlern</b> bist du raus.</li>
+        <li>9 Level – jedes schneller und mit mehr Farben.</li>
+        <li><b>Mehrspieler:</b> Reihum auf einem iPhone. Wer ein Level am schnellsten schafft, holt den Punkt.</li>
+      </ol>
+      <button class="big primary" data-back>Zurück</button>
+    </section>
+
+    <!-- Übergabe / Countdown -->
+    <section id="screen-ready" class="screen">
+      <div class="ready-level" id="ready-level"></div>
+      <div class="ready-player" id="ready-player"></div>
+      <div class="ready-info" id="ready-info"></div>
+      <button class="big primary" id="btn-go">Bereit!</button>
+      <div class="countdown" id="countdown"></div>
+    </section>
+
+    <!-- Spiel -->
+    <section id="screen-game" class="screen">
+      <header class="hud">
+        <div class="hud-l">
+          <div class="hud-small" id="hud-level">Level 1</div>
+          <div class="hud-small" id="hud-player"></div>
+        </div>
+        <div class="target-wrap">
+          <div class="hud-small">Zielfarbe</div>
+          <div class="target" id="target"></div>
+        </div>
+        <div class="hud-r">
+          <div class="time" id="hud-time">0.00</div>
+          <div class="lives" id="hud-lives"></div>
+        </div>
+      </header>
+      <div class="board" id="board"></div>
+      <button class="quit" id="btn-quit">Abbrechen</button>
+    </section>
+
+    <!-- Ergebnis eines Durchgangs -->
+    <section id="screen-result" class="screen">
+      <h2 id="res-title"></h2>
+      <div class="res-big" id="res-time"></div>
+      <div class="res-sub" id="res-sub"></div>
+      <div class="table" id="res-table"></div>
+      <button class="big primary" id="btn-next">Weiter</button>
+      <button class="big ghost" id="btn-menu">Menü</button>
+    </section>
+
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
