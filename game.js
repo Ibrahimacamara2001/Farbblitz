@@ -41,7 +41,7 @@ const BLITZ = 1.0;            // Treffer schneller als das = Blitz
 const HITS_PER_STAGE = 6;     // Chaos/Zeitjagd: alle 6 Treffer wird es schwerer
 const CHAOS = { start: 4, step: 0.08, min: 1.2, specialChance: 0.4 };
 const RUSH = { start: 30, hit: 1.5, miss: 2 };
-const DUEL = { win: 7, times: [4, 3.5, 3], sabotageMs: 1000 };
+const DUEL = { win: 7, time: 4, sabotageMs: 1000 };
 const DIFF_NAMES = ['Leicht', 'Mittel', 'Schwer'];
 const PLAYER_COLORS = ['#ffd23f', '#3d8bff'];
 
@@ -263,7 +263,8 @@ const scoring = () => game.mode === 'chaos' || game.mode === 'rush';
 function newGame() {
   game = {
     mode: MODES[settings.mode] ? settings.mode : 'classic',
-    diff: settings.diff,
+    // Schwierigkeit gibt es nur im Klassik-Modus; die anderen steigern sich selbst
+    diff: settings.mode === 'classic' ? settings.diff : 0,
     level: 1,
     mistakes: 0,
     total: 0,
@@ -296,7 +297,7 @@ function startRun() {
   const m = game.mode;
   $('#hud-level').textContent = m === 'classic'
     ? `Level ${game.level}/${LEVELS} · ${DIFF_NAMES[game.diff]}`
-    : `${MODES[m].name} · ${DIFF_NAMES[game.diff]}`;
+    : MODES[m].name;
   $('#hud-mid-label').textContent = m === 'classic' ? 'Zug' : 'Punkte';
   $('#hud-lives').style.visibility = m === 'rush' ? 'hidden' : 'visible';
   renderLives();
@@ -622,7 +623,7 @@ function nextDuelMove() {
   duel.move++;
   const stage = Math.min(LEVELS, 1 + Math.floor((duel.move - 1) / 3));
   duel.puzzle = makePuzzle(levelParams(stage, game.diff));
-  duel.limit = DUEL.times[game.diff];
+  duel.limit = DUEL.time;
   duel.state = 'pop';
   renderDuel();
   duel.sides.forEach((sd, s) => {
@@ -718,7 +719,7 @@ function finishDuel(s) {
   title.textContent = `Spieler ${s + 1} gewinnt das Duell!`;
   title.style.color = PLAYER_COLORS[s];
   $('#res-time').textContent = `${duel.sides[0].score} : ${duel.sides[1].score}`;
-  $('#res-sub').textContent = `${duel.move} Züge · ${DIFF_NAMES[game.diff]}`;
+  $('#res-sub').textContent = `${duel.move} Züge`;
   nextAction = null;
   showResult('Revanche');
 }
@@ -733,11 +734,11 @@ function showReady() {
     $('#ready-player').textContent = 'Bereit?';
     notes.push(`${ROUNDS} Züge`, `${p.colors} Farben`, `${p.moveTime} s pro Zug`);
   } else if (m === 'duel') {
-    $('#ready-level').textContent = `Duell · ${DIFF_NAMES[game.diff]}`;
+    $('#ready-level').textContent = 'Duell';
     $('#ready-player').textContent = 'Legt das iPhone flach zwischen euch';
     notes.push(`Wer zuerst ${DUEL.win} Punkte hat, gewinnt`, 'Falsch getippt = für den Zug gesperrt', `Treffer unter ${BLITZ} s sabotiert den Gegner`);
   } else {
-    $('#ready-level').textContent = `${MODES[m].name} · ${DIFF_NAMES[game.diff]}`;
+    $('#ready-level').textContent = MODES[m].name;
     $('#ready-player').textContent = 'Bereit?';
     notes.push(MODES[m].desc);
   }
@@ -779,18 +780,24 @@ function bindSeg(id, key) {
 function renderMenu() {
   const m = MODES[settings.mode];
   $('#mode-desc').textContent = m.desc;
-  const best = settings.mode === 'duel' ? null : storeGet(bestKey(settings.mode, settings.diff), null);
-  const where = `${m.name}, ${DIFF_NAMES[settings.diff]}`;
+  const classic = settings.mode === 'classic';
+  $('#group-diff').style.display = classic ? '' : 'none';
+  const best = settings.mode === 'duel' ? null : storeGet(bestKey(settings.mode, classic ? settings.diff : 0), null);
+  const where = classic ? `${m.name}, ${DIFF_NAMES[settings.diff]}` : m.name;
   $('#best').textContent = !best ? ''
     : best.score != null ? `Highscore (${where}): ${best.score} Pkt`
     : `Rekord (${where}): Level ${best.level}/${LEVELS} · ${fmt(best.total)}`;
 }
 
 function restoreSettings() {
-  // Alte Zeitjagd-Highscores (vor dem Aufräumen) übernehmen
-  [0, 1, 2].forEach((d) => {
-    const old = storeGet(`farbblitz.best.rush.cross.${d}`, null);
-    if (old && !storeGet(bestKey('rush', d), null)) storeSet(bestKey('rush', d), old);
+  // Alte Highscores übernehmen: frühere Zeitjagd-Rekorde und die getrennten Schwierigkeitsstufen
+  // von Chaos/Zeitjagd zum jeweils besten zusammenfassen
+  ['chaos', 'rush'].forEach((mode) => {
+    const olds = [0, 1, 2].flatMap((d) => [
+      storeGet(bestKey(mode, d), null),
+      mode === 'rush' ? storeGet(`farbblitz.best.rush.cross.${d}`, null) : null,
+    ]).filter((b) => b && b.score != null);
+    if (olds.length) storeSet(bestKey(mode, 0), { score: Math.max(...olds.map((b) => b.score)) });
   });
   const saved = storeGet('farbblitz.settings', {});
   if (MODES[saved.mode]) settings.mode = saved.mode;

@@ -14,7 +14,9 @@ Ein schnelles Reaktionsspiel fürs iPhone: Finde blitzschnell das eine leere Fel
 - Spielfeld: 13 Rauten im Muster 3-2-3-2-3.
 
 ## Modi
-- **Klassik:** 9 Level à 10 Züge, 3 s pro Zug (Schwer: 2 s), 3 Fehler = raus.
+Chaos, Zeitjagd und Duell haben keine Schwierigkeitsauswahl – sie werden mit der Zeit von selbst schwerer.
+
+- **Klassik:** 9 Level à 10 Züge, 3 s pro Zug (Schwer: 2 s), 3 Fehler = raus. Nur hier gibt es die Schwierigkeitsstufen Leicht, Mittel und Schwer.
 - **Chaos:** Endlos – Start mit **4 s** pro Zug, jeder Treffer macht es schneller (bis 1,2 s). Punkte für Tempo, **Combo-Multiplikator** bis ×5, **Blitz-Treffer** unter 1 s zählen doppelt. 3 Leben, Highscore wird gespeichert. Alle 6 Treffer steigt die Stufe: mehr Farben, mehr Lücken, ab Stufe 4 **Täuschungen** und nach und nach **Sonderzüge**:
   - 🌈 **Joker** (ab Stufe 2): Ein Regenbogenfeld zählt als jede Farbe.
   - ✌️ **Doppelzug** (ab Stufe 3): Zwei Lücken – beide finden.
