@@ -81,6 +81,7 @@ h2 { margin: 0; font-size: 30px; }
 .time { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .lives { font-size: 18px; letter-spacing: 2px; }
 .target-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.round-big { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; }
 .target { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 0 24px currentColor; border: 3px solid rgba(255,255,255,.25); }
 
 /* Zeitbalken */

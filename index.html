@@ -58,12 +58,12 @@
     <section id="screen-howto" class="screen">
       <h2>So geht's</h2>
       <ol class="howto">
-        <li>Oben steht die <b>Zielfarbe</b>.</li>
         <li>Auf dem Spielfeld ploppen alle Farben <b>gleichzeitig</b> auf und <b>bleiben stehen</b>. Einige Felder bleiben leer.</li>
-        <li>Finde das <b>eine leere Feld</b>, das mit der Zielfarbe eine <b>Dreierreihe</b> vervollständigt (waagrecht, senkrecht oder diagonal), und tippe es an.</li>
-        <li>Du hast <b>3 Sekunden</b> pro Zug. Ist die Zeit um, wird dir das richtige Feld gezeigt.</li>
+        <li>Genau <b>ein leeres Feld</b> ergibt eine <b>Dreierreihe</b> (waagrecht, senkrecht oder diagonal) – und zwar nur mit <b>einer</b> Farbe.</li>
+        <li>Finde und tippe es! Es füllt sich dann mit der passenden Farbe.</li>
+        <li>Du hast <b>3 Sekunden</b> pro Zug, auf <b>Schwer nur 2</b>. Ist die Zeit um, wird dir das richtige Feld gezeigt.</li>
         <li>Falsches Feld oder Zeit abgelaufen = Fehler. Nach <b>3 Fehlern</b> bist du raus.</li>
-        <li>9 Level mit je 5 Zügen – jedes Level hat mehr Farben, mehr leere Felder und mehr Täuschungen.</li>
+        <li>9 Level mit je 10 Zügen – jedes Level hat mehr Farben und mehr leere Felder.</li>
         <li><b>Mehrspieler:</b> Reihum auf einem iPhone. Wer ein Level am schnellsten schafft, holt den Punkt.</li>
       </ol>
       <button class="big primary" data-back>Zurück</button>
@@ -83,12 +83,11 @@
       <header class="hud">
         <div class="hud-l">
           <div class="hud-small" id="hud-level">Level 1</div>
-          <div class="hud-small" id="hud-round"></div>
           <div class="hud-small" id="hud-player"></div>
         </div>
         <div class="target-wrap">
-          <div class="hud-small">Zielfarbe</div>
-          <div class="target" id="target"></div>
+          <div class="hud-small">Zug</div>
+          <div class="round-big" id="hud-round"></div>
         </div>
         <div class="hud-r">
           <div class="time" id="hud-time">0.00</div>

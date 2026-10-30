@@ -34,8 +34,8 @@ for (const L of Object.values(LAYOUTS)) {
   }));
 }
 const LEVELS = 9;
-const ROUNDS = 5;          // Züge pro Level
-const MOVE_TIME = 3;       // Sekunden pro Zug
+const ROUNDS = 10;         // Züge pro Level
+const MOVE_TIMES = [3, 3, 2]; // Sekunden pro Zug je Schwierigkeit
 const POP_MS = 220;        // Dauer der Aufplopp-Animation, danach läuft die Zeit
 const HINT_MS = 1400;      // so lange wird die Lösung nach Zeitablauf gezeigt
 const MAX_MISTAKES = 3;
@@ -48,8 +48,7 @@ function levelParams(level, diff, layout) {
     colors: Math.min(COLORS.length, 3 + Math.floor((level - 1) / 2) + diff),
     // Mehr leere Felder = mehr Kandidaten, unter denen man das richtige finden muss
     empties: Math.min(n - 4, 2 + Math.floor((level - 1) / 2) + diff + (n > 9 ? 1 : 0)),
-    // Anteil der Zielfarbe unter den übrigen Feldern: viele Täuschungen in höheren Leveln
-    decoy: Math.min(0.45, 0.2 + level * 0.025 + diff * 0.05),
+    moveTime: MOVE_TIMES[diff],
   };
 }
 
@@ -97,31 +96,30 @@ const sfx = {
 };
 
 // ---------- Rätsel erzeugen ----------
-// Genau ein leeres Feld vervollständigt mit der Zielfarbe eine Dreierreihe.
+// Genau ein leeres Feld ergibt eine Dreierreihe – und das nur mit genau einer Farbe.
 function makePuzzle(L, p) {
   const n = L.points.length;
-  for (let tries = 0; tries < 1000; tries++) {
-    const target = rand(p.colors);
+  for (let tries = 0; tries < 5000; tries++) {
+    const color = rand(p.colors);
     const line = L.lines[rand(L.lines.length)];
     const answer = line[rand(3)];
     const board = new Array(n).fill(undefined);
-    line.forEach((k) => (board[k] = k === answer ? null : target));
+    line.forEach((k) => (board[k] = k === answer ? null : color));
 
     const rest = shuffle([...Array(n).keys()].filter((k) => !line.includes(k)));
     rest.slice(0, p.empties - 1).forEach((k) => (board[k] = null));
-    rest.slice(p.empties - 1).forEach((k) => {
-      board[k] = Math.random() < p.decoy ? target : (target + 1 + rand(p.colors - 1)) % p.colors;
-    });
+    rest.slice(p.empties - 1).forEach((k) => (board[k] = rand(p.colors)));
 
-    // Prüfen: keine fertige Reihe, und nur `answer` ergänzt eine Reihe der Zielfarbe
+    // Keine fertige Reihe; jede Reihe aus zwei gleichen Farben + Lücke muss genau die Lösung sein
     const ok = L.lines.every((l) => {
-      const t = l.filter((k) => board[k] === target).length;
-      const e = l.filter((k) => board[k] === null);
-      if (t === 3) return false;
-      if (t === 2 && e.length === 1) return e[0] === answer;
+      const filled = l.filter((k) => board[k] != null);
+      const empty = l.filter((k) => board[k] === null);
+      const same = filled.length >= 2 && filled.every((k) => board[k] === board[filled[0]]);
+      if (filled.length === 3 && same) return false;
+      if (filled.length === 2 && same) return empty[0] === answer && board[filled[0]] === color;
       return true;
     });
-    if (ok) return { board, target, answer };
+    if (ok) return { board, color, answer };
   }
   throw new Error('Kein Rätsel gefunden');
 }
@@ -185,13 +183,6 @@ function paint(i, color) {
   el.classList.toggle('lit', !!col);
 }
 
-function setTarget(idx) {
-  const t = $('#target');
-  t.style.background = COLORS[idx].hex;
-  t.style.color = COLORS[idx].hex;
-  t.setAttribute('aria-label', COLORS[idx].name);
-}
-
 // ---------- Ablauf eines Levels ----------
 function startRun() {
   const player = game.players[game.turn];
@@ -218,9 +209,8 @@ function later(fn, ms) { run.timers.push(setTimeout(fn, ms)); }
 
 function nextRound() {
   run.round++;
-  $('#hud-round').textContent = `Zug ${run.round}/${ROUNDS}`;
+  $('#hud-round').textContent = `${run.round}/${ROUNDS}`;
   run.puzzle = makePuzzle(run.L, run.p);
-  setTarget(run.puzzle.target);
   run.state = 'pop';
   board.classList.remove('hinting', 'miss');
   cells.forEach((el, i) => {
@@ -228,7 +218,7 @@ function nextRound() {
     paint(i, null);
   });
   setBar(1);
-  $('#hud-time').textContent = MOVE_TIME.toFixed(1);
+  $('#hud-time').textContent = run.p.moveTime.toFixed(1);
 
   // Alle Farben ploppen gleichzeitig auf und bleiben dann stehen
   run.puzzle.board.forEach((c, i) => {
@@ -257,9 +247,9 @@ function renderLives() {
 
 function loop(now) {
   if (!run || run.state !== 'play') return;
-  const left = MOVE_TIME - (now - run.start) / 1000;
+  const left = run.p.moveTime - (now - run.start) / 1000;
   $('#hud-time').textContent = Math.max(0, left).toFixed(1);
-  setBar(left / MOVE_TIME);
+  setBar(left / run.p.moveTime);
   if (left <= 0) return timeUp();
   run.raf = requestAnimationFrame(loop);
 }
@@ -276,14 +266,14 @@ function mistake() {
 
 function timeUp() {
   run.state = 'hint';
-  run.time += MOVE_TIME;
+  run.time += run.p.moveTime;
   const out = mistake();
   // Zeigen, welches Feld richtig gewesen wäre
   const el = cells[run.puzzle.answer];
-  el.style.setProperty('--glow', COLORS[run.puzzle.target].hex);
+  el.style.setProperty('--glow', COLORS[run.puzzle.color].hex);
   el.classList.add('hint');
-  const { board: b, target, answer } = run.puzzle;
-  run.L.lines.find((l) => l.includes(answer) && l.every((k) => k === answer || b[k] === target))
+  const { board: b, color, answer } = run.puzzle;
+  run.L.lines.find((l) => l.includes(answer) && l.every((k) => k === answer || b[k] === color))
     .forEach((k) => k !== answer && cells[k].classList.add('hint-line'));
   board.classList.add('hinting');
   later(() => (out ? endRun('out') : advance()), HINT_MS);
@@ -296,8 +286,8 @@ function tap(i) {
     run.state = 'won';
     cancelAnimationFrame(run.raf);
     run.time += (performance.now() - run.start) / 1000;
-    paint(i, puzzle.target);
-    const line = run.L.lines.find((l) => l.includes(i) && l.every((k) => k === i || puzzle.board[k] === puzzle.target));
+    paint(i, puzzle.color);
+    const line = run.L.lines.find((l) => l.includes(i) && l.every((k) => k === i || puzzle.board[k] === puzzle.color));
     line.forEach((k) => cells[k].classList.add('win'));
     sfx.hit();
     later(advance, 550);
@@ -450,7 +440,7 @@ function showReady() {
   $('#ready-level').textContent = `Level ${game.level} von ${LEVELS} · ${DIFF_NAMES[game.diff]}`;
   $('#ready-player').textContent = solo() ? 'Bereit?' : `${pl.name} ist dran`;
   $('#ready-player').style.color = solo() ? '' : pl.color;
-  const notes = [`${ROUNDS} Züge`, `${p.colors} Farben`, `${MOVE_TIME} s pro Zug`];
+  const notes = [`${ROUNDS} Züge`, `${p.colors} Farben`, `${p.moveTime} s pro Zug`];
   if (!solo()) notes.push('iPhone weitergeben!');
   $('#ready-info').textContent = notes.join(' · ');
   $('#countdown').textContent = '';
