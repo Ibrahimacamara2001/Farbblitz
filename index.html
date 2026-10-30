@@ -23,6 +23,18 @@
       <p class="tagline">Finde das Feld, das die Dreierreihe macht!</p>
 
       <div class="group">
+        <div class="label">Modus</div>
+        <div class="seg seg-wrap" id="seg-mode">
+          <button data-v="classic" class="on">Klassik</button>
+          <button data-v="chaos">Chaos</button>
+          <button data-v="endless">Endlos</button>
+          <button data-v="rush">Zeitjagd</button>
+          <button data-v="duel">Duell</button>
+        </div>
+        <div class="mode-desc" id="mode-desc"></div>
+      </div>
+
+      <div class="group" id="group-players">
         <div class="label">Spieler</div>
         <div class="seg" id="seg-players">
           <button data-v="1" class="on">Solo</button>
@@ -57,15 +69,21 @@
     <!-- Anleitung -->
     <section id="screen-howto" class="screen">
       <h2>So geht's</h2>
+      <div class="howto-scroll">
       <ol class="howto">
-        <li>Auf dem Spielfeld ploppen alle Farben <b>gleichzeitig</b> auf und <b>bleiben stehen</b>. Einige Felder bleiben leer.</li>
-        <li>Genau <b>ein leeres Feld</b> ergibt eine <b>Dreierreihe</b> (waagrecht, senkrecht oder diagonal) – und zwar nur mit <b>einer</b> Farbe.</li>
-        <li>Finde und tippe es! Es füllt sich dann mit der passenden Farbe.</li>
-        <li>Du hast <b>3 Sekunden</b> pro Zug, auf <b>Schwer nur 2</b>. Ist die Zeit um, wird dir das richtige Feld gezeigt.</li>
-        <li>Falsches Feld oder Zeit abgelaufen = Fehler. Nach <b>3 Fehlern</b> bist du raus.</li>
-        <li>9 Level mit je 10 Zügen – jedes Level hat mehr Farben und mehr leere Felder.</li>
-        <li><b>Mehrspieler:</b> Reihum auf einem iPhone. Wer ein Level am schnellsten schafft, holt den Punkt.</li>
+        <li>Alle Farben ploppen <b>gleichzeitig</b> auf und <b>bleiben stehen</b>. Einige Felder bleiben leer.</li>
+        <li>Genau <b>ein leeres Feld</b> ergibt eine <b>Dreierreihe</b> (waagrecht, senkrecht oder diagonal) – und nur mit <b>einer</b> Farbe. Finde und tippe es!</li>
+        <li>Falsches Feld oder Zeit abgelaufen = Fehler. Ist die Zeit um, wird das richtige Feld gezeigt.</li>
       </ol>
+      <h3>Modi</h3>
+      <ul class="howto">
+        <li><b>Klassik:</b> 9 Level à 10 Züge, 3 s pro Zug (Schwer: 2 s), 3 Fehler = raus. Bis 4 Spieler reihum.</li>
+        <li><b>Chaos:</b> Wie Klassik plus Sonderzüge – 🌈 Joker (zählt als jede Farbe), ✌️ Doppelzug (zwei Lücken), 🌀 Dreher (Feld dreht sich), 🌑 Blackout (Farben verschwinden nach 1 s). Ab Level 4 Täuschungen. Level 3 und 6 sind Bonus-Level: 20 Züge ohne Zeitlimit.</li>
+        <li><b>Endlos:</b> Start mit 4 s pro Zug, jeder Treffer macht es schneller. Punkte für Tempo, Combo-Multiplikator bis ×5, Blitz-Treffer (unter 1 s) zählen doppelt. 3 Leben.</li>
+        <li><b>Zeitjagd:</b> 30 s auf der Uhr. Treffer +1,5 s, Fehler −2 s. Punkte wie bei Endlos.</li>
+        <li><b>Duell:</b> Zwei Spieler gleichzeitig, iPhone flach zwischen euch. Wer zuerst richtig tippt, punktet; wer falsch tippt, ist für den Zug gesperrt. Ein Blitz-Treffer sabotiert den Gegner: Sein Feld bleibt im nächsten Zug 1 s verdeckt. Wer zuerst 7 hat, gewinnt.</li>
+      </ul>
+      </div>
       <button class="big primary" data-back>Zurück</button>
     </section>
 
@@ -86,8 +104,9 @@
           <div class="hud-small" id="hud-player"></div>
         </div>
         <div class="target-wrap">
-          <div class="hud-small">Zug</div>
+          <div class="hud-small" id="hud-mid-label">Zug</div>
           <div class="round-big" id="hud-round"></div>
+          <div class="combo" id="hud-combo"></div>
         </div>
         <div class="hud-r">
           <div class="time" id="hud-time">0.00</div>
@@ -95,8 +114,30 @@
         </div>
       </header>
       <div class="timebar" id="timebar"><i></i></div>
-      <div class="board" id="board"></div>
-      <button class="quit" id="btn-quit">Abbrechen</button>
+      <div class="board-wrap" id="board-wrap">
+        <div class="board" id="board"></div>
+        <div class="banner" id="banner"></div>
+      </div>
+      <button class="quit" data-quit>Abbrechen</button>
+    </section>
+
+    <!-- Duell: oben gedreht für den Gegenüber -->
+    <section id="screen-duel" class="screen">
+      <div class="duel-side flip" id="duel-1">
+        <div class="duel-head"><span class="duel-name"></span><span class="duel-score"></span></div>
+        <div class="duel-status"></div>
+        <div class="board"></div>
+      </div>
+      <div class="duel-mid">
+        <span id="duel-move"></span>
+        <div class="timebar" id="duel-bar"><i></i></div>
+        <button class="quit" data-quit>✕</button>
+      </div>
+      <div class="duel-side" id="duel-0">
+        <div class="duel-head"><span class="duel-name"></span><span class="duel-score"></span></div>
+        <div class="duel-status"></div>
+        <div class="board"></div>
+      </div>
     </section>
 
     <!-- Ergebnis eines Durchgangs -->
