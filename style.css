@@ -91,10 +91,20 @@ h2 { margin: 0; font-size: 30px; }
 }
 .cell {
   position: relative; border-radius: 14px; background: var(--off); border: 0; padding: 0;
-  transition: background-color .06s, box-shadow .06s, transform .06s;
+  transition: background-color .06s, box-shadow .06s, scale .06s;
 }
 .cell.lit { box-shadow: 0 0 22px var(--glow, transparent); }
-.cell:active { transform: scale(.95); }
+.cell:active { scale: .95; }
+
+/* Gitter: 13 Rauten im 3-2-3-2-3-Muster */
+.board.cross { display: block; position: relative; padding: 0; background: transparent; box-shadow: none; }
+.board.cross .cell { position: absolute; transform: rotate(45deg); border-radius: 12px; box-shadow: inset 0 0 0 2px #34366a; }
+.board.cross .cell.lit { box-shadow: 0 0 22px var(--glow, transparent); }
+.board.cross .cell.claimed { box-shadow: inset 0 0 0 5px rgba(255,255,255,.9), 0 0 26px var(--glow); }
+.board.cross .cell.claimed::after { rotate: -45deg; font-size: 34px; }
+.board.cross.miss { animation: none; }
+.board.cross.miss .cell { animation: flashcell .3s; }
+@keyframes flashcell { 50% { box-shadow: inset 0 0 0 3px var(--red); } }
 .cell.claimed { box-shadow: inset 0 0 0 5px rgba(255,255,255,.9), 0 0 26px var(--glow); }
 .cell.claimed::after {
   content: "✓"; position: absolute; inset: 0; display: grid; place-items: center;
@@ -104,8 +114,8 @@ h2 { margin: 0; font-size: 30px; }
 .cell.win { animation: pulse .5s 3; }
 .board.miss { animation: flash .3s; }
 
-@keyframes shake { 0%,100% { transform: translateX(0) } 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
-@keyframes pulse { 50% { transform: scale(1.08); } }
+@keyframes shake { 0%,100% { translate: 0 } 25% { translate: -6px 0 } 75% { translate: 6px 0 } }
+@keyframes pulse { 50% { scale: 1.1; } }
 @keyframes flash { 50% { box-shadow: inset 0 0 0 4px var(--red), 0 0 30px var(--red); } }
 
 .quit { background: none; border: 0; color: var(--muted); font: inherit; padding: 10px; }

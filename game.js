@@ -9,24 +9,43 @@ const COLORS = [
   { id: 'orange', name: 'Orange', hex: '#ff9b3d' },
   { id: 'white',  name: 'Weiß',   hex: '#f2f2f2' },
 ];
-const LINES = [
-  [0, 1, 2], [3, 4, 5], [6, 7, 8],
-  [0, 3, 6], [1, 4, 7], [2, 5, 8],
-  [0, 4, 8], [2, 4, 6],
-];
+// Spielfelder: Punkte auf einem Raster + Schrittweiten, entlang derer drei Felder eine Reihe bilden
+const LAYOUTS = {
+  cross: {
+    name: 'Gitter',
+    size: 5,
+    // 3-2-3-2-3: alle Punkte, bei denen x und y beide gerade oder beide ungerade sind
+    points: Array.from({ length: 25 }, (_, k) => [k % 5, Math.floor(k / 5)]).filter(([x, y]) => (x + y) % 2 === 0),
+    steps: [[2, 0], [0, 2], [1, 1], [1, -1]],
+  },
+  grid: {
+    name: '3×3',
+    size: 3,
+    points: Array.from({ length: 9 }, (_, k) => [k % 3, Math.floor(k / 3)]),
+    steps: [[1, 0], [0, 1], [1, 1], [1, -1]],
+  },
+};
+for (const L of Object.values(LAYOUTS)) {
+  const at = (x, y) => L.points.findIndex(([px, py]) => px === x && py === y);
+  L.lines = [];
+  L.points.forEach(([x, y], i) => L.steps.forEach(([dx, dy]) => {
+    const b = at(x + dx, y + dy), c = at(x + 2 * dx, y + 2 * dy);
+    if (b >= 0 && c >= 0) L.lines.push([i, b, c]);
+  }));
+}
 const LEVELS = 9;
 const MAX_MISTAKES = 3;
 const LEVEL_TIMEOUT = 30; // Sekunden
 const DIFF_NAMES = ['Leicht', 'Mittel', 'Schwer'];
 const PLAYER_COLORS = ['#ffd23f', '#3d8bff', '#3ddc84', '#ff4d5e'];
 
-function levelParams(level, diff) {
+function levelParams(level, diff, extra = 0) {
   const flashMs = Math.max(260, [1150, 900, 700][diff] * Math.pow(0.9, level - 1));
   const colors = Math.min(COLORS.length, 3 + Math.floor((level - 1) / 2) + diff);
   return {
     flashMs,
     spawnMs: flashMs * 0.42,
-    maxLit: Math.min(6, 2 + Math.floor(level / 3) + diff),
+    maxLit: Math.min(7, 2 + Math.floor(level / 3) + diff + extra),
     colors,
     targetChance: Math.max(0.3, 1.6 / colors),
     // Ab Level 4 (Mittel/Schwer) wechselt die Zielfarbe nach jedem Treffer
@@ -79,13 +98,14 @@ const sfx = {
 };
 
 // ---------- Spielzustand ----------
-const settings = { players: 1, diff: 0 };
+const settings = { players: 1, diff: 0, layout: 'cross' };
 let game = null;   // gesamte Partie
 let run = null;    // aktueller Durchgang eines Spielers
 
 function newGame() {
   game = {
     diff: settings.diff,
+    layout: LAYOUTS[settings.layout] ? settings.layout : 'cross',
     level: 1,
     players: Array.from({ length: settings.players }, (_, i) => ({
       name: settings.players === 1 ? 'Du' : `Spieler ${i + 1}`,
@@ -105,14 +125,29 @@ const active = () => game.players.filter((p) => !p.out);
 
 // ---------- Board ----------
 const board = $('#board');
-const cells = [];
-for (let i = 0; i < 9; i++) {
-  const b = document.createElement('button');
-  b.className = 'cell';
-  b.setAttribute('aria-label', `Feld ${i + 1}`);
-  b.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(i); });
-  board.appendChild(b);
-  cells.push(b);
+let cells = [];
+let lines = [];
+
+function buildBoard(key) {
+  const L = LAYOUTS[key];
+  lines = L.lines;
+  board.innerHTML = '';
+  board.className = 'board ' + key;
+  // Rauten im Gitter: Abstand u zwischen Rasterpunkten, Kantenlänge a, g = Füllgrad
+  const g = 0.84, u = 100 / (L.size - 1 + 2 * g), a = Math.SQRT2 * u * g;
+  cells = L.points.map(([x, y], i) => {
+    const b = document.createElement('button');
+    b.className = 'cell';
+    b.setAttribute('aria-label', `Feld ${i + 1}`);
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); tap(i); });
+    if (key === 'cross') {
+      b.style.width = b.style.height = a + '%';
+      b.style.left = (x * u + g * u - a / 2) + '%';
+      b.style.top = (y * u + g * u - a / 2) + '%';
+    }
+    board.appendChild(b);
+    return b;
+  });
 }
 
 function paint(i) {
@@ -142,19 +177,19 @@ function pickTarget(avoid) {
 // ---------- Ablauf eines Durchgangs ----------
 function startRun() {
   const player = game.players[game.turn];
-  const p = levelParams(game.level, game.diff);
+  const p = levelParams(game.level, game.diff, game.layout === 'cross' ? 1 : 0);
+  buildBoard(game.layout);
   run = {
     player,
     p,
-    cells: Array.from({ length: 9 }, () => ({ color: null, until: 0, claimed: null, claimedAt: 0 })),
+    cells: Array.from({ length: cells.length }, () => ({ color: null, until: 0, claimed: null, claimedAt: 0 })),
     target: 0,
     start: performance.now(),
     nextSpawn: 0,
     over: false,
     raf: 0,
   };
-  cells.forEach((el) => el.classList.remove('win', 'wrong'));
-  cells.forEach((_, i) => paint(i));
+    cells.forEach((_, i) => paint(i));
   setTarget(pickTarget(-1));
   $('#hud-level').textContent = `Level ${game.level}/${LEVELS} · ${DIFF_NAMES[game.diff]}`;
   $('#hud-player').textContent = solo() ? '' : player.name;
@@ -209,7 +244,7 @@ function tap(i) {
     c.color = null;
     paint(i);
     sfx.hit();
-    const line = LINES.find((l) => l.every((k) => run.cells[k].claimed != null));
+    const line = lines.find((l) => l.every((k) => run.cells[k].claimed != null));
     if (line) {
       line.forEach((k) => cells[k].classList.add('win'));
       return endRun(true);
@@ -330,12 +365,12 @@ function finishGame() {
     const cleared = pl.out ? game.level - 1 : LEVELS;
     title.textContent = cleared === LEVELS ? 'Alle 9 Level geschafft!' : 'Game Over';
     $('#res-time').textContent = cleared === LEVELS ? fmt(pl.total) : `Level ${cleared}/${LEVELS}`;
-    const key = `farbblitz.best.${game.diff}`;
+    const key = `farbblitz.best.${game.layout}.${game.diff}`;
     const best = storeGet(key, null);
     const better = !best || cleared > best.level || (cleared === best.level && pl.total < best.total);
     if (better && cleared > 0) storeSet(key, { level: cleared, total: pl.total });
     $('#res-sub').textContent = (better && cleared > 0 ? '🏆 Neue Bestleistung! ' : '') +
-      `Gesamtzeit ${fmt(pl.total)} · ${DIFF_NAMES[game.diff]}`;
+      `Gesamtzeit ${fmt(pl.total)} · ${LAYOUTS[game.layout].name} · ${DIFF_NAMES[game.diff]}`;
   } else {
     const ranked = [...game.players].sort((a, b) => (a.out - b.out) || (b.points - a.points) || (a.total - b.total));
     const champ = ranked[0];
@@ -353,7 +388,7 @@ function finishGame() {
 // ---------- Bereit-Bildschirm & Countdown ----------
 function showReady() {
   const pl = game.players[game.turn];
-  const p = levelParams(game.level, game.diff);
+  const p = levelParams(game.level, game.diff, game.layout === 'cross' ? 1 : 0);
   $('#btn-next').textContent = 'Weiter';
   $('#ready-level').textContent = `Level ${game.level} von ${LEVELS} · ${DIFF_NAMES[game.diff]}`;
   $('#ready-player').textContent = solo() ? 'Bereit?' : `${pl.name} ist dran`;
@@ -391,28 +426,30 @@ function bindSeg(id, key) {
     const b = e.target.closest('button');
     if (!b) return;
     seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    settings[key] = Number(b.dataset.v);
+    settings[key] = key === 'layout' ? b.dataset.v : Number(b.dataset.v);
     storeSet('farbblitz.settings', settings);
     renderBest();
   });
 }
 
 function renderBest() {
-  const best = storeGet(`farbblitz.best.${settings.diff}`, null);
+  const best = storeGet(`farbblitz.best.${settings.layout}.${settings.diff}`, null);
   $('#best').textContent = best
-    ? `Solo-Rekord (${DIFF_NAMES[settings.diff]}): Level ${best.level}/${LEVELS} · ${fmt(best.total)}`
+    ? `Solo-Rekord (${LAYOUTS[settings.layout].name}, ${DIFF_NAMES[settings.diff]}): Level ${best.level}/${LEVELS} · ${fmt(best.total)}`
     : '';
 }
 
 function restoreSettings() {
   Object.assign(settings, storeGet('farbblitz.settings', {}));
-  [['#seg-players', 'players'], ['#seg-diff', 'diff']].forEach(([id, key]) => {
-    $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === settings[key]));
+  if (!LAYOUTS[settings.layout]) settings.layout = 'cross';
+  [['#seg-players', 'players'], ['#seg-diff', 'diff'], ['#seg-layout', 'layout']].forEach(([id, key]) => {
+    $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', String(b.dataset.v) === String(settings[key])));
   });
 }
 
 bindSeg('#seg-players', 'players');
 bindSeg('#seg-diff', 'diff');
+bindSeg('#seg-layout', 'layout');
 restoreSettings();
 renderBest();
 

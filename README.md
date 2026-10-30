@@ -1,6 +1,6 @@
 # Farbblitz ⚡
 
-Ein schnelles Reaktionsspiel fürs iPhone: Schnapp dir die Zielfarbe auf dem 3×3-Feld und verbinde drei in einer Reihe – solo oder mit bis zu 4 Spielern reihum.
+Ein schnelles Reaktionsspiel fürs iPhone: Schnapp dir die Zielfarbe auf dem Spielfeld und verbinde drei in einer Reihe – solo oder mit bis zu 4 Spielern reihum.
 
 ## Aufs iPhone holen
 1. Die Spiel-URL (z. B. über GitHub Pages) in **Safari** öffnen.
@@ -8,7 +8,8 @@ Ein schnelles Reaktionsspiel fürs iPhone: Schnapp dir die Zielfarbe auf dem 3×
 3. Farbblitz startet jetzt im Vollbild wie eine App und funktioniert auch offline.
 
 ## Regeln
-- Oben steht die **Zielfarbe**. Auf dem 3×3-Feld blitzen Felder in zufälligen Farben auf.
+- Zwei Spielfelder: **Gitter** mit 13 Rauten im Muster 3-2-3-2-3 (16 mögliche Reihen) oder klassisch **3×3**.
+- Oben steht die **Zielfarbe**. Auf dem Spielfeld blitzen Felder in zufälligen Farben auf.
 - Tippe ein Feld, **während** es in der Zielfarbe leuchtet – es gehört dann dir.
 - Drei eigene Felder in einer Reihe (waagrecht, senkrecht, diagonal) = Level geschafft.
 - Falscher Tipp = Fehler. **3 Fehler** und du bist raus.
