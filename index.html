@@ -20,7 +20,7 @@
     <!-- Startmenü -->
     <section id="screen-menu" class="screen active">
       <h1 class="logo">Farb<span>blitz</span></h1>
-      <p class="tagline">Schnapp dir die Zielfarbe – drei in einer Reihe!</p>
+      <p class="tagline">Finde das Feld, das die Dreierreihe macht!</p>
 
       <div class="group">
         <div class="label">Spieler</div>
@@ -59,11 +59,11 @@
       <h2>So geht's</h2>
       <ol class="howto">
         <li>Oben steht die <b>Zielfarbe</b>.</li>
-        <li>Auf dem Spielfeld (Gitter mit 13 Feldern oder 3×3) blitzen Felder in zufälligen Farben auf.</li>
-        <li>Tippe ein Feld, <b>während</b> es in der Zielfarbe leuchtet – es wird dir gutgeschrieben.</li>
-        <li>Verbinde drei Felder zu einer <b>Reihe</b> (waagrecht, senkrecht oder diagonal), so schnell du kannst. Im Gitter zählen auch die Diagonalen durch die versetzten Felder.</li>
-        <li>Falscher Tipp = Fehler. Nach <b>3 Fehlern</b> bist du raus.</li>
-        <li>9 Level – jedes schneller und mit mehr Farben.</li>
+        <li>Auf dem Spielfeld ploppen alle Farben <b>gleichzeitig</b> auf und <b>bleiben stehen</b>. Einige Felder bleiben leer.</li>
+        <li>Finde das <b>eine leere Feld</b>, das mit der Zielfarbe eine <b>Dreierreihe</b> vervollständigt (waagrecht, senkrecht oder diagonal), und tippe es an.</li>
+        <li>Du hast <b>3 Sekunden</b> pro Zug. Ist die Zeit um, wird dir das richtige Feld gezeigt.</li>
+        <li>Falsches Feld oder Zeit abgelaufen = Fehler. Nach <b>3 Fehlern</b> bist du raus.</li>
+        <li>9 Level mit je 5 Zügen – jedes Level hat mehr Farben, mehr leere Felder und mehr Täuschungen.</li>
         <li><b>Mehrspieler:</b> Reihum auf einem iPhone. Wer ein Level am schnellsten schafft, holt den Punkt.</li>
       </ol>
       <button class="big primary" data-back>Zurück</button>
@@ -83,6 +83,7 @@
       <header class="hud">
         <div class="hud-l">
           <div class="hud-small" id="hud-level">Level 1</div>
+          <div class="hud-small" id="hud-round"></div>
           <div class="hud-small" id="hud-player"></div>
         </div>
         <div class="target-wrap">
@@ -94,6 +95,7 @@
           <div class="lives" id="hud-lives"></div>
         </div>
       </header>
+      <div class="timebar" id="timebar"><i></i></div>
       <div class="board" id="board"></div>
       <button class="quit" id="btn-quit">Abbrechen</button>
     </section>

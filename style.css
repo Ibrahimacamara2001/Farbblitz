@@ -83,6 +83,10 @@ h2 { margin: 0; font-size: 30px; }
 .target-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .target { width: 64px; height: 64px; border-radius: 16px; box-shadow: 0 0 24px currentColor; border: 3px solid rgba(255,255,255,.25); }
 
+/* Zeitbalken */
+.timebar { width: 100%; height: 10px; border-radius: 5px; background: var(--bg2); overflow: hidden; }
+.timebar i { display: block; height: 100%; width: 100%; border-radius: 5px; }
+
 /* Board */
 .board {
   width: 100%; aspect-ratio: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
@@ -111,7 +115,14 @@ h2 { margin: 0; font-size: 30px; }
   font-size: 40px; font-weight: 900; color: rgba(0,0,0,.55);
 }
 .cell.wrong { animation: shake .3s; }
-.cell.win { animation: pulse .5s 3; }
+.cell.win { animation: pulse .5s 1; box-shadow: inset 0 0 0 5px rgba(255,255,255,.9), 0 0 30px var(--glow) !important; }
+.cell.pop { animation: pop .22s ease-out; }
+.board.hinting .cell:not(.hint):not(.hint-line) { opacity: .25; transition: opacity .25s; }
+.board.hinting .cell.hint::after { content: "☝"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; }
+.board.cross.hinting .cell.hint::after { rotate: -45deg; }
+.cell.hint { animation: hint .45s infinite alternate; }
+@keyframes pop { from { scale: .3; opacity: 0; } 70% { scale: 1.08; } to { scale: 1; opacity: 1; } }
+@keyframes hint { from { box-shadow: inset 0 0 0 4px #fff, 0 0 10px var(--glow); background: var(--off); } to { box-shadow: inset 0 0 0 4px #fff, 0 0 34px var(--glow); background: var(--glow); } }
 .board.miss { animation: flash .3s; }
 
 @keyframes shake { 0%,100% { translate: 0 } 25% { translate: -6px 0 } 75% { translate: 6px 0 } }

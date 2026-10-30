@@ -34,30 +34,29 @@ for (const L of Object.values(LAYOUTS)) {
   }));
 }
 const LEVELS = 9;
+const ROUNDS = 5;          // Züge pro Level
+const MOVE_TIME = 3;       // Sekunden pro Zug
+const POP_MS = 220;        // Dauer der Aufplopp-Animation, danach läuft die Zeit
+const HINT_MS = 1400;      // so lange wird die Lösung nach Zeitablauf gezeigt
 const MAX_MISTAKES = 3;
-const LEVEL_TIMEOUT = 30; // Sekunden
 const DIFF_NAMES = ['Leicht', 'Mittel', 'Schwer'];
 const PLAYER_COLORS = ['#ffd23f', '#3d8bff', '#3ddc84', '#ff4d5e'];
 
-function levelParams(level, diff, extra = 0) {
-  const flashMs = Math.max(260, [1150, 900, 700][diff] * Math.pow(0.9, level - 1));
-  const colors = Math.min(COLORS.length, 3 + Math.floor((level - 1) / 2) + diff);
+function levelParams(level, diff, layout) {
+  const n = LAYOUTS[layout].points.length;
   return {
-    flashMs,
-    spawnMs: flashMs * 0.42,
-    maxLit: Math.min(7, 2 + Math.floor(level / 3) + diff + extra),
-    colors,
-    targetChance: Math.max(0.3, 1.6 / colors),
-    // Ab Level 4 (Mittel/Schwer) wechselt die Zielfarbe nach jedem Treffer
-    shiftingTarget: diff >= 1 && level >= 4,
-    // Ab Level 7 auf Schwer erlöschen eigene Felder wieder nach 4 s
-    decayMs: diff === 2 && level >= 7 ? 4000 : 0,
+    colors: Math.min(COLORS.length, 3 + Math.floor((level - 1) / 2) + diff),
+    // Mehr leere Felder = mehr Kandidaten, unter denen man das richtige finden muss
+    empties: Math.min(n - 4, 2 + Math.floor((level - 1) / 2) + diff + (n > 9 ? 1 : 0)),
+    // Anteil der Zielfarbe unter den übrigen Feldern: viele Täuschungen in höheren Leveln
+    decoy: Math.min(0.45, 0.2 + level * 0.025 + diff * 0.05),
   };
 }
 
 // ---------- Helfer ----------
 const $ = (s) => document.querySelector(s);
 const rand = (n) => Math.floor(Math.random() * n);
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const fmt = (t) => (t == null || !isFinite(t) ? '—' : t.toFixed(2) + ' s');
 
 function show(id) {
@@ -90,17 +89,47 @@ function beep(freq, dur = 0.08, type = 'sine', vol = 0.15) {
 }
 const buzz = (ms) => { if (navigator.vibrate) navigator.vibrate(ms); };
 const sfx = {
-  hit: () => { beep(880, 0.07, 'triangle'); buzz(10); },
+  pop: () => beep(760, 0.06, 'triangle', 0.08),
+  hit: () => { [660, 880, 1100].forEach((f, i) => setTimeout(() => beep(f, 0.1, 'triangle'), i * 70)); buzz(15); },
   miss: () => { beep(140, 0.22, 'sawtooth', 0.12); buzz([40, 30, 40]); },
-  win: () => { [660, 880, 1100].forEach((f, i) => setTimeout(() => beep(f, 0.12, 'triangle'), i * 90)); },
   tick: () => beep(520, 0.06, 'square', 0.08),
   go: () => beep(1040, 0.15, 'square', 0.1),
 };
 
+// ---------- Rätsel erzeugen ----------
+// Genau ein leeres Feld vervollständigt mit der Zielfarbe eine Dreierreihe.
+function makePuzzle(L, p) {
+  const n = L.points.length;
+  for (let tries = 0; tries < 1000; tries++) {
+    const target = rand(p.colors);
+    const line = L.lines[rand(L.lines.length)];
+    const answer = line[rand(3)];
+    const board = new Array(n).fill(undefined);
+    line.forEach((k) => (board[k] = k === answer ? null : target));
+
+    const rest = shuffle([...Array(n).keys()].filter((k) => !line.includes(k)));
+    rest.slice(0, p.empties - 1).forEach((k) => (board[k] = null));
+    rest.slice(p.empties - 1).forEach((k) => {
+      board[k] = Math.random() < p.decoy ? target : (target + 1 + rand(p.colors - 1)) % p.colors;
+    });
+
+    // Prüfen: keine fertige Reihe, und nur `answer` ergänzt eine Reihe der Zielfarbe
+    const ok = L.lines.every((l) => {
+      const t = l.filter((k) => board[k] === target).length;
+      const e = l.filter((k) => board[k] === null);
+      if (t === 3) return false;
+      if (t === 2 && e.length === 1) return e[0] === answer;
+      return true;
+    });
+    if (ok) return { board, target, answer };
+  }
+  throw new Error('Kein Rätsel gefunden');
+}
+
 // ---------- Spielzustand ----------
 const settings = { players: 1, diff: 0, layout: 'cross' };
 let game = null;   // gesamte Partie
-let run = null;    // aktueller Durchgang eines Spielers
+let run = null;    // aktueller Durchgang (ein Level) eines Spielers
 
 function newGame() {
   game = {
@@ -126,11 +155,9 @@ const active = () => game.players.filter((p) => !p.out);
 // ---------- Board ----------
 const board = $('#board');
 let cells = [];
-let lines = [];
 
 function buildBoard(key) {
   const L = LAYOUTS[key];
-  lines = L.lines;
   board.innerHTML = '';
   board.className = 'board ' + key;
   // Rauten im Gitter: Abstand u zwischen Rasterpunkten, Kantenlänge a, g = Füllgrad
@@ -150,53 +177,77 @@ function buildBoard(key) {
   });
 }
 
-function paint(i) {
-  const c = run.cells[i];
+function paint(i, color) {
   const el = cells[i];
-  const col = c.claimed != null ? COLORS[c.claimed] : c.color != null ? COLORS[c.color] : null;
+  const col = color == null ? null : COLORS[color];
   el.style.background = col ? col.hex : '';
   el.style.setProperty('--glow', col ? col.hex : 'transparent');
   el.classList.toggle('lit', !!col);
-  el.classList.toggle('claimed', c.claimed != null);
 }
 
 function setTarget(idx) {
-  run.target = idx;
   const t = $('#target');
   t.style.background = COLORS[idx].hex;
   t.style.color = COLORS[idx].hex;
   t.setAttribute('aria-label', COLORS[idx].name);
 }
 
-function pickTarget(avoid) {
-  let t;
-  do { t = rand(run.p.colors); } while (t === avoid && run.p.colors > 1);
-  return t;
-}
-
-// ---------- Ablauf eines Durchgangs ----------
+// ---------- Ablauf eines Levels ----------
 function startRun() {
   const player = game.players[game.turn];
-  const p = levelParams(game.level, game.diff, game.layout === 'cross' ? 1 : 0);
   buildBoard(game.layout);
   run = {
     player,
-    p,
-    cells: Array.from({ length: cells.length }, () => ({ color: null, until: 0, claimed: null, claimedAt: 0 })),
-    target: 0,
-    start: performance.now(),
-    nextSpawn: 0,
-    over: false,
+    L: LAYOUTS[game.layout],
+    p: levelParams(game.level, game.diff, game.layout),
+    round: 0,
+    time: 0,          // Summe der Reaktionszeiten
+    state: 'idle',    // idle | pop | play | hint | over
+    timers: [],
     raf: 0,
   };
-    cells.forEach((_, i) => paint(i));
-  setTarget(pickTarget(-1));
   $('#hud-level').textContent = `Level ${game.level}/${LEVELS} · ${DIFF_NAMES[game.diff]}`;
   $('#hud-player').textContent = solo() ? '' : player.name;
   $('#hud-player').style.color = player.color;
   renderLives();
   show('screen-game');
-  run.raf = requestAnimationFrame(loop);
+  nextRound();
+}
+
+function later(fn, ms) { run.timers.push(setTimeout(fn, ms)); }
+
+function nextRound() {
+  run.round++;
+  $('#hud-round').textContent = `Zug ${run.round}/${ROUNDS}`;
+  run.puzzle = makePuzzle(run.L, run.p);
+  setTarget(run.puzzle.target);
+  run.state = 'pop';
+  board.classList.remove('hinting', 'miss');
+  cells.forEach((el, i) => {
+    el.className = 'cell';
+    paint(i, null);
+  });
+  setBar(1);
+  $('#hud-time').textContent = MOVE_TIME.toFixed(1);
+
+  // Alle Farben ploppen gleichzeitig auf und bleiben dann stehen
+  run.puzzle.board.forEach((c, i) => {
+    if (c == null) return;
+    paint(i, c);
+    cells[i].classList.add('pop');
+  });
+  sfx.pop();
+  later(() => {
+    run.state = 'play';
+    run.start = performance.now();
+    run.raf = requestAnimationFrame(loop);
+  }, POP_MS);
+}
+
+function setBar(frac) {
+  const bar = $('#timebar i');
+  bar.style.width = Math.max(0, frac) * 100 + '%';
+  bar.style.background = frac > 0.5 ? 'var(--green)' : frac > 0.25 ? 'var(--orange)' : 'var(--red)';
 }
 
 function renderLives() {
@@ -205,75 +256,83 @@ function renderLives() {
 }
 
 function loop(now) {
-  if (!run || run.over) return;
-  const t = (now - run.start) / 1000;
-  $('#hud-time').textContent = t.toFixed(2);
-  if (t >= LEVEL_TIMEOUT) return endRun(false, 'timeout');
-
-  const { p } = run;
-  // Abgelaufene Blitze löschen, ggf. eigene Felder zerfallen lassen
-  run.cells.forEach((c, i) => {
-    if (c.color != null && now >= c.until) { c.color = null; paint(i); }
-    if (p.decayMs && c.claimed != null && now - c.claimedAt > p.decayMs) { c.claimed = null; paint(i); }
-  });
-
-  // Neue Blitze erzeugen
-  if (now >= run.nextSpawn) {
-    const free = run.cells.map((c, i) => i).filter((i) => run.cells[i].claimed == null && run.cells[i].color == null);
-    const lit = run.cells.filter((c) => c.color != null).length;
-    if (free.length && lit < p.maxLit) {
-      const i = free[rand(free.length)];
-      const c = run.cells[i];
-      c.color = Math.random() < p.targetChance ? run.target : pickTarget(run.target);
-      c.until = now + p.flashMs * (0.75 + Math.random() * 0.5);
-      paint(i);
-    }
-    run.nextSpawn = now + p.spawnMs * (0.6 + Math.random() * 0.8);
-  }
+  if (!run || run.state !== 'play') return;
+  const left = MOVE_TIME - (now - run.start) / 1000;
+  $('#hud-time').textContent = Math.max(0, left).toFixed(1);
+  setBar(left / MOVE_TIME);
+  if (left <= 0) return timeUp();
   run.raf = requestAnimationFrame(loop);
 }
 
-function tap(i) {
-  if (!run || run.over) return;
-  const c = run.cells[i];
-  if (c.claimed != null) return;
+function mistake() {
+  run.player.mistakes++;
+  sfx.miss();
+  board.classList.remove('miss');
+  void board.offsetWidth;
+  board.classList.add('miss');
+  renderLives();
+  return run.player.mistakes >= MAX_MISTAKES;
+}
 
-  if (c.color === run.target) {
-    c.claimed = c.color;
-    c.claimedAt = performance.now();
-    c.color = null;
-    paint(i);
+function timeUp() {
+  run.state = 'hint';
+  run.time += MOVE_TIME;
+  const out = mistake();
+  // Zeigen, welches Feld richtig gewesen wäre
+  const el = cells[run.puzzle.answer];
+  el.style.setProperty('--glow', COLORS[run.puzzle.target].hex);
+  el.classList.add('hint');
+  const { board: b, target, answer } = run.puzzle;
+  run.L.lines.find((l) => l.includes(answer) && l.every((k) => k === answer || b[k] === target))
+    .forEach((k) => k !== answer && cells[k].classList.add('hint-line'));
+  board.classList.add('hinting');
+  later(() => (out ? endRun('out') : advance()), HINT_MS);
+}
+
+function tap(i) {
+  if (!run || run.state !== 'play') return;
+  const { puzzle } = run;
+  if (i === puzzle.answer) {
+    run.state = 'won';
+    cancelAnimationFrame(run.raf);
+    run.time += (performance.now() - run.start) / 1000;
+    paint(i, puzzle.target);
+    const line = run.L.lines.find((l) => l.includes(i) && l.every((k) => k === i || puzzle.board[k] === puzzle.target));
+    line.forEach((k) => cells[k].classList.add('win'));
     sfx.hit();
-    const line = lines.find((l) => l.every((k) => run.cells[k].claimed != null));
-    if (line) {
-      line.forEach((k) => cells[k].classList.add('win'));
-      return endRun(true);
-    }
-    if (run.p.shiftingTarget) setTarget(pickTarget(run.target));
+    later(advance, 550);
   } else {
-    // Fehler: falsche Farbe oder leeres Feld
-    run.player.mistakes++;
-    sfx.miss();
     cells[i].classList.remove('wrong');
     void cells[i].offsetWidth;
     cells[i].classList.add('wrong');
-    board.classList.remove('miss');
-    void board.offsetWidth;
-    board.classList.add('miss');
-    renderLives();
-    if (run.player.mistakes >= MAX_MISTAKES) return endRun(false, 'out');
+    if (mistake()) {
+      run.state = 'over';
+      cancelAnimationFrame(run.raf);
+      later(() => endRun('out'), 400);
+    }
   }
 }
 
-function endRun(won, reason) {
-  run.over = true;
+function advance() {
+  if (run.round >= ROUNDS) endRun('done');
+  else nextRound();
+}
+
+function stopRun() {
+  if (!run) return;
+  run.state = 'over';
   cancelAnimationFrame(run.raf);
-  const time = (performance.now() - run.start) / 1000;
+  run.timers.forEach(clearTimeout);
+}
+
+function endRun(reason) {
+  stopRun();
   const pl = run.player;
-  pl.levelTime = won ? time : null;
-  if (won) { pl.total += time; sfx.win(); }
+  const done = reason === 'done';
+  pl.levelTime = done ? run.time : null;
+  if (done) pl.total += run.time;
   if (reason === 'out') pl.out = true;
-  setTimeout(() => afterRun(won, reason, time), won ? 650 : 350);
+  afterRun(done, reason, run.time);
 }
 
 // ---------- Nach dem Durchgang ----------
@@ -284,16 +343,14 @@ function afterRun(won, reason, time) {
   const title = $('#res-title');
   const table = $('#res-table');
   table.innerHTML = '';
+  title.style.color = '';
 
   if (solo()) {
-    if (won && game.level === LEVELS) return finishGame();
-    if (!won && reason === 'out') return finishGame();
-    title.textContent = won ? `Level ${game.level} geschafft!` : 'Zeit abgelaufen';
-    $('#res-time').textContent = won ? fmt(time) : '—';
-    $('#res-sub').textContent = won
-      ? `Gesamtzeit: ${fmt(pl.total)} · Fehler: ${pl.mistakes}/${MAX_MISTAKES}`
-      : 'Versuch das Level noch einmal.';
-    if (won) game.level++;
+    if (!won || game.level === LEVELS) return finishGame();
+    title.textContent = `Level ${game.level} geschafft!`;
+    $('#res-time').textContent = fmt(time);
+    $('#res-sub').textContent = `Gesamtzeit: ${fmt(pl.total)} · Fehler: ${pl.mistakes}/${MAX_MISTAKES}`;
+    game.level++;
     nextAction = () => showReady();
     show('screen-result');
     return;
@@ -301,7 +358,7 @@ function afterRun(won, reason, time) {
 
   // Mehrspieler: nächster aktiver Spieler im selben Level?
   const next = nextPlayerIndex(game.turn);
-  title.textContent = pl.out ? `${pl.name} ist raus!` : won ? `${pl.name}: geschafft!` : `${pl.name}: Zeit abgelaufen`;
+  title.textContent = pl.out ? `${pl.name} ist raus!` : `${pl.name}: geschafft!`;
   title.style.color = pl.color;
   $('#res-time').textContent = won ? fmt(time) : '—';
   $('#res-sub').textContent = `Fehler: ${pl.mistakes}/${MAX_MISTAKES}`;
@@ -337,8 +394,10 @@ function nextPlayerIndex(from) {
   return null;
 }
 
+const rank = (a, b) => (a.out - b.out) || (b.points - a.points) || (a.total - b.total);
+
 function renderTable(el, withLevel) {
-  const sorted = [...game.players].sort((a, b) => (a.out - b.out) || (b.points - a.points) || (a.total - b.total));
+  const sorted = [...game.players].sort(rank);
   const lead = sorted[0];
   el.innerHTML = '';
   sorted.forEach((p) => {
@@ -357,8 +416,7 @@ function renderTable(el, withLevel) {
 function finishGame() {
   const title = $('#res-title');
   title.style.color = '';
-  const table = $('#res-table');
-  table.innerHTML = '';
+  $('#res-table').innerHTML = '';
 
   if (solo()) {
     const pl = game.players[0];
@@ -372,13 +430,12 @@ function finishGame() {
     $('#res-sub').textContent = (better && cleared > 0 ? '🏆 Neue Bestleistung! ' : '') +
       `Gesamtzeit ${fmt(pl.total)} · ${LAYOUTS[game.layout].name} · ${DIFF_NAMES[game.diff]}`;
   } else {
-    const ranked = [...game.players].sort((a, b) => (a.out - b.out) || (b.points - a.points) || (a.total - b.total));
-    const champ = ranked[0];
+    const champ = [...game.players].sort(rank)[0];
     title.textContent = `${champ.name} gewinnt!`;
     title.style.color = champ.color;
     $('#res-time').textContent = `${champ.points} Pkt`;
     $('#res-sub').textContent = `Gespielt bis Level ${game.level} · ${DIFF_NAMES[game.diff]}`;
-    renderTable(table, false);
+    renderTable($('#res-table'), false);
   }
   nextAction = null;
   $('#btn-next').textContent = 'Nochmal';
@@ -388,14 +445,12 @@ function finishGame() {
 // ---------- Bereit-Bildschirm & Countdown ----------
 function showReady() {
   const pl = game.players[game.turn];
-  const p = levelParams(game.level, game.diff, game.layout === 'cross' ? 1 : 0);
+  const p = levelParams(game.level, game.diff, game.layout);
   $('#btn-next').textContent = 'Weiter';
   $('#ready-level').textContent = `Level ${game.level} von ${LEVELS} · ${DIFF_NAMES[game.diff]}`;
   $('#ready-player').textContent = solo() ? 'Bereit?' : `${pl.name} ist dran`;
   $('#ready-player').style.color = solo() ? '' : pl.color;
-  const notes = [`${p.colors} Farben`];
-  if (p.shiftingTarget) notes.push('Zielfarbe wechselt nach jedem Treffer');
-  if (p.decayMs) notes.push('Eigene Felder erlöschen nach 4 s');
+  const notes = [`${ROUNDS} Züge`, `${p.colors} Farben`, `${MOVE_TIME} s pro Zug`];
   if (!solo()) notes.push('iPhone weitergeben!');
   $('#ready-info').textContent = notes.join(' · ');
   $('#countdown').textContent = '';
@@ -462,7 +517,7 @@ $('#btn-next').addEventListener('click', () => {
 });
 $('#btn-menu').addEventListener('click', () => { renderBest(); show('screen-menu'); });
 $('#btn-quit').addEventListener('click', () => {
-  if (run) { run.over = true; cancelAnimationFrame(run.raf); }
+  stopRun();
   renderBest();
   show('screen-menu');
 });
