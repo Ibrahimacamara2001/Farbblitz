@@ -11,69 +11,54 @@ const COLORS = [
 ];
 const JOKER = -1; // zählt als jede Farbe
 
-// Spielfelder: Punkte auf einem Raster + Schrittweiten, entlang derer drei Felder eine Reihe bilden
-const LAYOUTS = {
-  cross: {
-    name: 'Gitter',
-    size: 5,
-    // 3-2-3-2-3: alle Punkte, bei denen x und y beide gerade oder beide ungerade sind
-    points: Array.from({ length: 25 }, (_, k) => [k % 5, Math.floor(k / 5)]).filter(([x, y]) => (x + y) % 2 === 0),
-    steps: [[2, 0], [0, 2], [1, 1], [1, -1]],
-  },
-  grid: {
-    name: '3×3',
-    size: 3,
-    points: Array.from({ length: 9 }, (_, k) => [k % 3, Math.floor(k / 3)]),
-    steps: [[1, 0], [0, 1], [1, 1], [1, -1]],
-  },
-};
-for (const L of Object.values(LAYOUTS)) {
-  const at = (x, y) => L.points.findIndex(([px, py]) => px === x && py === y);
-  L.lines = [];
-  L.points.forEach(([x, y], i) => L.steps.forEach(([dx, dy]) => {
+// Spielfeld: 13 Rauten im Muster 3-2-3-2-3 (Rasterpunkte, bei denen x und y beide gerade oder beide ungerade sind)
+const GRID_SIZE = 5;
+const POINTS = Array.from({ length: 25 }, (_, k) => [k % 5, Math.floor(k / 5)]).filter(([x, y]) => (x + y) % 2 === 0);
+// Drei Felder in gleichem Abstand entlang einer dieser Richtungen bilden eine Reihe
+const LINES = [];
+{
+  const at = (x, y) => POINTS.findIndex(([px, py]) => px === x && py === y);
+  POINTS.forEach(([x, y], i) => [[2, 0], [0, 2], [1, 1], [1, -1]].forEach(([dx, dy]) => {
     const b = at(x + dx, y + dy), c = at(x + 2 * dx, y + 2 * dy);
-    if (b >= 0 && c >= 0) L.lines.push([i, b, c]);
+    if (b >= 0 && c >= 0) LINES.push([i, b, c]);
   }));
 }
 
 const MODES = {
-  classic: { name: 'Klassik',  multi: true,  desc: '9 Level à 10 Züge. 3 s pro Zug (Schwer: 2 s), 3 Fehler und du bist raus.' },
-  chaos:   { name: 'Chaos',    multi: true,  desc: 'Wie Klassik, aber mit Sonderzügen (Joker, Doppelzug, Dreher, Blackout), Täuschungen und Bonus-Leveln.' },
-  endless: { name: 'Endlos',   multi: false, desc: 'Start mit 4 s pro Zug, jeder Treffer macht es schneller. Combos und Blitz-Treffer geben Extrapunkte.' },
-  rush:    { name: 'Zeitjagd', multi: false, desc: '30 s auf der Uhr. Treffer +1,5 s, Fehler −2 s. Wie viele Punkte schaffst du?' },
-  duel:    { name: 'Duell',    multi: false, desc: 'Zwei Spieler gleichzeitig an einem iPhone. Wer zuerst tippt, punktet. Blitz-Treffer sabotieren den Gegner.' },
+  classic: { name: 'Klassik',  desc: '9 Level à 10 Züge. 3 s pro Zug (Schwer: 2 s), 3 Fehler und du bist raus.' },
+  chaos:   { name: 'Chaos',    desc: 'Endlos: Start mit 4 s pro Zug, jeder Treffer macht es schneller. Dazu Sonderzüge, Combos und Blitz-Punkte.' },
+  rush:    { name: 'Zeitjagd', desc: '30 s auf der Uhr. Treffer +1,5 s, Fehler −2 s. Wie viele Punkte schaffst du?' },
+  duel:    { name: 'Duell',    desc: 'Zwei Spieler gleichzeitig an einem iPhone. Wer zuerst tippt, punktet. Blitz-Treffer sabotieren den Gegner.' },
 };
 
 const LEVELS = 9;
-const ROUNDS = 10;            // Züge pro Level
-const BONUS_ROUNDS = 20;      // Züge im Bonus-Level (Chaos)
-const BONUS_LEVELS = [3, 6];  // Bonus-Level im Chaos-Modus
-const MOVE_TIMES = [3, 3, 2]; // Sekunden pro Zug je Schwierigkeit
+const ROUNDS = 10;            // Züge pro Level (Klassik)
+const MOVE_TIMES = [3, 3, 2]; // Sekunden pro Zug je Schwierigkeit (Klassik)
 const POP_MS = 220;           // Dauer der Aufplopp-Animation, danach läuft die Zeit
 const HINT_MS = 1400;         // so lange wird die Lösung nach Zeitablauf gezeigt
 const MAX_MISTAKES = 3;
 const BLITZ = 1.0;            // Treffer schneller als das = Blitz
-const ENDLESS = { start: 4, step: 0.08, min: 1.2 };
+const HITS_PER_STAGE = 6;     // Chaos/Zeitjagd: alle 6 Treffer wird es schwerer
+const CHAOS = { start: 4, step: 0.08, min: 1.2, specialChance: 0.4 };
 const RUSH = { start: 30, hit: 1.5, miss: 2 };
 const DUEL = { win: 7, times: [4, 3.5, 3], sabotageMs: 1000 };
 const DIFF_NAMES = ['Leicht', 'Mittel', 'Schwer'];
-const PLAYER_COLORS = ['#ffd23f', '#3d8bff', '#3ddc84', '#ff4d5e'];
+const PLAYER_COLORS = ['#ffd23f', '#3d8bff'];
 
+// Sonderzüge im Chaos-Modus; `from` = ab welcher Stufe, `time` = Zeitfaktor für den Zug
 const SPECIALS = {
-  joker:    { from: 2, label: '🌈 Joker', info: 'Das Regenbogenfeld zählt als jede Farbe' },
-  double:   { from: 3, label: '✌️ Doppelzug', info: 'Zwei Lücken – finde beide!' },
-  spin:     { from: 4, label: '🌀 Dreher', info: 'Das Feld dreht sich' },
-  blackout: { from: 5, label: '🌑 Blackout', info: 'Merk dir die Farben!' },
+  joker:    { from: 2, time: 1,   label: '🌈 Joker', info: 'Das Regenbogenfeld zählt als jede Farbe' },
+  double:   { from: 3, time: 1.6, label: '✌️ Doppelzug', info: 'Zwei Lücken – finde beide!' },
+  spin:     { from: 4, time: 1,   label: '🌀 Dreher', info: 'Das Feld dreht sich' },
+  blackout: { from: 5, time: 1.3, label: '🌑 Blackout', info: 'Merk dir die Farben!' },
 };
 
-function levelParams(level, diff, layout) {
-  const n = LAYOUTS[layout].points.length;
+function levelParams(level, diff) {
   return {
     colors: Math.min(COLORS.length, 3 + Math.floor((level - 1) / 2) + diff),
     // Mehr leere Felder = mehr Kandidaten, unter denen man das richtige finden muss
-    empties: Math.min(n - 4, 2 + Math.floor((level - 1) / 2) + diff + (n > 9 ? 1 : 0)),
+    empties: Math.min(POINTS.length - 4, 3 + Math.floor((level - 1) / 2) + diff),
     moveTime: MOVE_TIMES[diff],
-    decoys: 0,
   };
 }
 
@@ -126,11 +111,11 @@ const sfx = {
 
 // ---------- Rätsel ----------
 // Alle (Feld, Farbe)-Paare, mit denen ein leeres Feld eine Dreierreihe ergibt
-function solutions(L, board, ncolors) {
+function solutions(board, ncolors) {
   const found = new Set();
   board.forEach((v, e) => {
     if (v !== null) return;
-    for (const l of L.lines) {
+    for (const l of LINES) {
       if (!l.includes(e)) continue;
       const others = l.filter((k) => k !== e).map((k) => board[k]);
       if (others.some((o) => o == null)) continue;
@@ -142,8 +127,8 @@ function solutions(L, board, ncolors) {
   return [...found];
 }
 
-function hasComplete(L, board) {
-  return L.lines.some((l) => {
+function hasComplete(board) {
+  return LINES.some((l) => {
     const v = l.map((k) => board[k]);
     if (v.some((o) => o == null)) return false;
     const real = v.filter((o) => o !== JOKER);
@@ -152,14 +137,14 @@ function hasComplete(L, board) {
 }
 
 // Die Reihe, die `cell` mit `color` vervollständigt
-function lineFor(L, board, cell, color) {
-  return L.lines.find((l) => l.includes(cell) && l.every((k) => k === cell || board[k] === color || board[k] === JOKER));
+function lineFor(board, cell, color) {
+  return LINES.find((l) => l.includes(cell) && l.every((k) => k === cell || board[k] === color || board[k] === JOKER));
 }
 
 // Genau die vorgesehenen Lücken ergeben eine Reihe – jede nur mit genau einer Farbe.
 // opts: { double, joker, decoys }
-function makePuzzle(L, p, opts = {}) {
-  const n = L.points.length;
+function makePuzzle(p, opts = {}) {
+  const n = POINTS.length;
   const want = opts.double ? 2 : 1;
   const ncolors = p.colors;
   for (let tries = 0; tries < 4000; tries++) {
@@ -168,7 +153,7 @@ function makePuzzle(L, p, opts = {}) {
     let fail = false;
 
     for (let a = 0; a < want && !fail; a++) {
-      const free = L.lines.filter((l) => l.every((k) => board[k] === undefined));
+      const free = LINES.filter((l) => l.every((k) => board[k] === undefined));
       if (!free.length) { fail = true; break; }
       const line = pick(free);
       const color = answers.length && Math.random() < 0.7 ? (answers[0].color + 1 + rand(ncolors - 1)) % ncolors : rand(ncolors);
@@ -181,7 +166,7 @@ function makePuzzle(L, p, opts = {}) {
 
     // Täuschungen: zwei gleiche Farben, aber das dritte Feld ist schon falsch belegt
     for (let d = 0; d < (opts.decoys || 0); d++) {
-      const free = L.lines.filter((l) => l.every((k) => board[k] === undefined));
+      const free = LINES.filter((l) => l.every((k) => board[k] === undefined));
       if (!free.length) break;
       const line = shuffle([...pick(free)]);
       const c = rand(ncolors);
@@ -195,15 +180,15 @@ function makePuzzle(L, p, opts = {}) {
     rest.slice(0, extraEmpty).forEach((k) => (board[k] = null));
     rest.slice(extraEmpty).forEach((k) => (board[k] = rand(ncolors)));
 
-    if (hasComplete(L, board)) continue;
+    if (hasComplete(board)) continue;
     const key = (a) => a.cell + ':' + a.color;
-    const sol = solutions(L, board, ncolors);
+    const sol = solutions(board, ncolors);
     if (sol.length !== want || !answers.every((a) => sol.includes(key(a)))) continue;
     // Beim Doppelzug: nach dem ersten Treffer darf nur noch die andere Lücke passen
     if (want === 2 && !answers.every((a, i) => {
       const b2 = board.slice();
       b2[a.cell] = a.color;
-      const s2 = solutions(L, b2, ncolors);
+      const s2 = solutions(b2, ncolors);
       return s2.length === 1 && s2[0] === key(answers[1 - i]);
     })) continue;
 
@@ -214,22 +199,19 @@ function makePuzzle(L, p, opts = {}) {
 
 // ---------- Board ----------
 // Baut ein Spielfeld in `el` und liefert die Feld-Buttons
-function buildBoard(el, key, onTap) {
-  const L = LAYOUTS[key];
+function buildBoard(el, onTap) {
   el.innerHTML = '';
-  el.className = 'board ' + key;
-  // Rauten im Gitter: Abstand u zwischen Rasterpunkten, Kantenlänge a, g = Füllgrad
-  const g = 0.84, u = 100 / (L.size - 1 + 2 * g), a = Math.SQRT2 * u * g;
-  return L.points.map(([x, y], i) => {
+  el.className = 'board';
+  // Rauten: Abstand u zwischen Rasterpunkten, Kantenlänge a, g = Füllgrad
+  const g = 0.84, u = 100 / (GRID_SIZE - 1 + 2 * g), a = Math.SQRT2 * u * g;
+  return POINTS.map(([x, y], i) => {
     const b = document.createElement('button');
     b.className = 'cell';
     b.setAttribute('aria-label', `Feld ${i + 1}`);
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); onTap(i); });
-    if (key === 'cross') {
-      b.style.width = b.style.height = a + '%';
-      b.style.left = (x * u + g * u - a / 2) + '%';
-      b.style.top = (y * u + g * u - a / 2) + '%';
-    }
+    b.style.width = b.style.height = a + '%';
+    b.style.left = (x * u + g * u - a / 2) + '%';
+    b.style.top = (y * u + g * u - a / 2) + '%';
     el.appendChild(b);
     return b;
   });
@@ -251,18 +233,18 @@ function showPuzzle(cellEls, puzzle) {
   });
 }
 
-function revealAnswers(L, cellEls, boardEl, puzzle, answers) {
+function revealAnswers(cellEls, boardEl, puzzle, answers) {
   answers.forEach(({ cell, color }) => {
     cellEls[cell].style.setProperty('--glow', COLORS[color].hex);
     cellEls[cell].classList.add('hint');
-    lineFor(L, puzzle.board, cell, color).forEach((k) => k !== cell && cellEls[k].classList.add('hint-line'));
+    lineFor(puzzle.board, cell, color).forEach((k) => k !== cell && cellEls[k].classList.add('hint-line'));
   });
   boardEl.classList.add('hinting');
 }
 
-function markWin(L, cellEls, puzzle, { cell, color }) {
+function markWin(cellEls, puzzle, { cell, color }) {
   paintCell(cellEls[cell], color);
-  lineFor(L, puzzle.board, cell, color).forEach((k) => cellEls[k].classList.add('win'));
+  lineFor(puzzle.board, cell, color).forEach((k) => cellEls[k].classList.add('win'));
 }
 
 function shake(el) {
@@ -272,72 +254,51 @@ function shake(el) {
 }
 
 // ---------- Spielzustand ----------
-const settings = { players: 1, diff: 0, layout: 'cross', mode: 'classic' };
+const settings = { diff: 0, mode: 'classic' };
 let game = null;   // gesamte Partie
-let run = null;    // aktueller Durchgang eines Spielers
+let run = null;    // aktueller Durchgang (Klassik: ein Level)
 
-const levelMode = () => game.mode === 'classic' || game.mode === 'chaos';
-const isBonus = () => game.mode === 'chaos' && BONUS_LEVELS.includes(game.level);
+const scoring = () => game.mode === 'chaos' || game.mode === 'rush';
 
 function newGame() {
-  const mode = MODES[settings.mode] ? settings.mode : 'classic';
-  const count = MODES[mode].multi ? settings.players : mode === 'duel' ? 2 : 1;
   game = {
-    mode,
+    mode: MODES[settings.mode] ? settings.mode : 'classic',
     diff: settings.diff,
-    layout: LAYOUTS[settings.layout] ? settings.layout : 'cross',
     level: 1,
-    players: Array.from({ length: count }, (_, i) => ({
-      name: count === 1 ? 'Du' : `Spieler ${i + 1}`,
-      color: PLAYER_COLORS[i],
-      mistakes: 0,
-      out: false,
-      points: 0,
-      total: 0,
-      levelTime: null,
-    })),
-    turn: 0,
+    mistakes: 0,
+    total: 0,
   };
 }
 
-const solo = () => game.players.length === 1;
-const active = () => game.players.filter((p) => !p.out);
-
-// ---------- Einzelspieler-Ablauf (Klassik, Chaos, Endlos, Zeitjagd) ----------
+// ---------- Einzelspieler-Ablauf (Klassik, Chaos, Zeitjagd) ----------
 const board = $('#board');
 let cells = [];
 
 function startRun() {
-  const player = game.players[game.turn];
-  const L = LAYOUTS[game.layout];
-  cells = buildBoard(board, game.layout, tap);
+  cells = buildBoard(board, tap);
   run = {
-    player,
-    L,
-    p: levelParams(game.level, game.diff, game.layout),
-    rounds: isBonus() ? BONUS_ROUNDS : ROUNDS,
+    p: levelParams(game.level, game.diff),
     round: 0,
-    time: 0,          // Summe der Reaktionszeiten (Level-Modi)
+    time: 0,          // Summe der Reaktionszeiten (Klassik)
     state: 'idle',    // idle | pop | play | won | hint | over
     timers: [],
     raf: 0,
+    clockRaf: 0,
     // Punkte-Modi
     score: 0,
     hits: 0,
     streak: 0,
     bestStreak: 0,
     blitzes: 0,
-    moveTime: game.mode === 'endless' ? ENDLESS.start : MOVE_TIMES[game.diff],
+    moveTime: game.mode === 'chaos' ? CHAOS.start : MOVE_TIMES[game.diff],
     clock: RUSH.start,
   };
   const m = game.mode;
-  $('#hud-level').textContent = levelMode()
-    ? `${isBonus() ? '⭐ Bonus · ' : ''}Level ${game.level}/${LEVELS} · ${DIFF_NAMES[game.diff]}`
+  $('#hud-level').textContent = m === 'classic'
+    ? `Level ${game.level}/${LEVELS} · ${DIFF_NAMES[game.diff]}`
     : `${MODES[m].name} · ${DIFF_NAMES[game.diff]}`;
-  $('#hud-player').textContent = solo() ? '' : player.name;
-  $('#hud-player').style.color = player.color;
-  $('#hud-mid-label').textContent = levelMode() ? 'Zug' : 'Punkte';
-  $('#hud-lives').style.visibility = m === 'rush' || isBonus() ? 'hidden' : 'visible';
+  $('#hud-mid-label').textContent = m === 'classic' ? 'Zug' : 'Punkte';
+  $('#hud-lives').style.visibility = m === 'rush' ? 'hidden' : 'visible';
   renderLives();
   renderCombo();
   show('screen-game');
@@ -352,31 +313,29 @@ function later(fn, ms) { run.timers.push(setTimeout(fn, ms)); }
 
 // Parameter für den nächsten Zug je nach Modus
 function moveSetup() {
-  const m = game.mode;
-  if (m === 'endless' || m === 'rush') {
-    const level = Math.min(LEVELS, 1 + Math.floor(run.hits / 6));
-    run.p = levelParams(level, game.diff, game.layout);
-    return { opts: {}, kind: null, limit: m === 'endless' ? run.moveTime : Infinity };
-  }
-  if (m === 'chaos') {
-    const p = run.p;
-    p.decoys = game.level >= 4 ? 1 + Math.floor((game.level - 4) / 3) : 0;
-    const unlocked = Object.keys(SPECIALS).filter((k) => game.level >= SPECIALS[k].from);
-    const kind = unlocked.length && Math.random() < 0.4 ? pick(unlocked) : null;
-    const opts = { decoys: p.decoys, joker: kind === 'joker', double: kind === 'double' };
-    let limit = isBonus() ? Infinity : p.moveTime * (kind === 'double' ? 1.6 : kind === 'blackout' ? 1.3 : 1);
-    return { opts, kind, limit };
-  }
-  return { opts: {}, kind: null, limit: run.p.moveTime };
+  if (game.mode === 'classic') return { opts: {}, kind: null, limit: run.p.moveTime };
+  const stage = Math.min(LEVELS, 1 + Math.floor(run.hits / HITS_PER_STAGE));
+  run.p = levelParams(stage, game.diff);
+  if (game.mode === 'rush') return { opts: {}, kind: null, limit: Infinity };
+
+  // Chaos: Täuschungen ab Stufe 4, Sonderzüge je nach Stufe
+  const decoys = stage >= 4 ? 1 + Math.floor((stage - 4) / 3) : 0;
+  const unlocked = Object.keys(SPECIALS).filter((k) => stage >= SPECIALS[k].from);
+  const kind = unlocked.length && Math.random() < CHAOS.specialChance ? pick(unlocked) : null;
+  return {
+    opts: { decoys, joker: kind === 'joker', double: kind === 'double' },
+    kind,
+    limit: run.moveTime * (kind ? SPECIALS[kind].time : 1),
+  };
 }
 
 function nextRound() {
   run.round++;
   const setup = moveSetup();
-  let puzzle = makePuzzle(run.L, run.p, setup.opts);
+  let puzzle = makePuzzle(run.p, setup.opts);
   if (!puzzle) { // Sonderzug passt nicht aufs Feld → normaler Zug
     setup.kind = null;
-    puzzle = makePuzzle(run.L, run.p, { decoys: setup.opts.decoys });
+    puzzle = makePuzzle(run.p, { decoys: setup.opts.decoys });
   }
   run.puzzle = puzzle;
   run.open = puzzle.answers.slice();
@@ -385,7 +344,7 @@ function nextRound() {
   run.state = 'pop';
   updateMid();
 
-  board.classList.remove('hinting', 'miss', 'spin', 'spin2', 'blackout');
+  board.classList.remove('hinting', 'miss', 'spin', 'blackout');
   board.style.removeProperty('--spin');
   showPuzzle(cells, puzzle);
   sfx.pop();
@@ -412,7 +371,7 @@ function nextRound() {
 }
 
 function updateMid() {
-  $('#hud-round').textContent = levelMode() ? `${run.round}/${run.rounds}` : run.score;
+  $('#hud-round').textContent = game.mode === 'classic' ? `${run.round}/${ROUNDS}` : run.score;
 }
 
 function setBar(frac) {
@@ -422,16 +381,14 @@ function setBar(frac) {
 }
 
 function renderLives() {
-  const left = MAX_MISTAKES - run.player.mistakes;
+  const left = MAX_MISTAKES - game.mistakes;
   $('#hud-lives').textContent = '♥'.repeat(Math.max(0, left)) + '♡'.repeat(Math.max(0, MAX_MISTAKES - left));
 }
 
 function multiplier() { return Math.min(5, 1 + Math.floor(run.streak / 4)); }
 
 function renderCombo() {
-  const el = $('#hud-combo');
-  const scoring = game.mode === 'endless' || game.mode === 'rush';
-  el.textContent = scoring && run.streak >= 2 ? `Combo ${run.streak} · ×${multiplier()}` : '';
+  $('#hud-combo').textContent = scoring() && run.streak >= 2 ? `Combo ${run.streak} · ×${multiplier()}` : '';
 }
 
 function banner(title, text) {
@@ -457,26 +414,17 @@ function floatText(text, cls = '') {
 
 function loop(now) {
   if (!run || run.state !== 'play') return;
-  if (isFinite(run.limit)) {
-    const left = run.limit - (now - run.start) / 1000;
-    $('#hud-time').textContent = Math.max(0, left).toFixed(1);
-    setBar(left / run.limit);
-    if (left <= 0) return timeUp();
-  } else {
-    // Bonus-Level: kein Zuglimit, die Uhr zählt hoch
-    $('#hud-time').textContent = (run.time + (now - run.start) / 1000).toFixed(1);
-    setBar(1);
-  }
+  const left = run.limit - (now - run.start) / 1000;
+  $('#hud-time').textContent = Math.max(0, left).toFixed(1);
+  setBar(left / run.limit);
+  if (left <= 0) return timeUp();
   run.raf = requestAnimationFrame(loop);
 }
 
 // Zeitjagd: eine Uhr für alles
-function rushClock(now) {
-  return run.clockStart == null ? run.clock : run.clock - (now - run.clockStart) / 1000;
-}
 function rushLoop(now) {
   if (!run || run.state === 'over') return;
-  const left = rushClock(now);
+  const left = run.clockStart == null ? run.clock : run.clock - (now - run.clockStart) / 1000;
   $('#hud-time').textContent = Math.max(0, left).toFixed(1);
   setBar(left / RUSH.start);
   if (left <= 0) {
@@ -491,7 +439,7 @@ function rushAdjust(delta) {
   floatText((delta > 0 ? '+' : '−') + Math.abs(delta).toFixed(1) + ' s', delta > 0 ? 'good' : 'bad');
 }
 
-// Fehler; liefert true, wenn der Spieler damit raus ist
+// Fehler; liefert true, wenn man damit raus ist
 function mistake() {
   sfx.miss();
   board.classList.remove('miss');
@@ -500,10 +448,9 @@ function mistake() {
   run.streak = 0;
   renderCombo();
   if (game.mode === 'rush') { rushAdjust(-RUSH.miss); return false; }
-  if (isBonus()) { run.time += 2; floatText('+2 s Strafe', 'bad'); return false; }
-  run.player.mistakes++;
+  game.mistakes++;
   renderLives();
-  return run.player.mistakes >= MAX_MISTAKES;
+  return game.mistakes >= MAX_MISTAKES;
 }
 
 function timeUp() {
@@ -511,7 +458,7 @@ function timeUp() {
   run.time += run.limit;
   const out = mistake();
   board.classList.remove('blackout', 'spin');
-  revealAnswers(run.L, cells, board, run.puzzle, run.open);
+  revealAnswers(cells, board, run.puzzle, run.open);
   later(() => (out ? endRun('out') : advance()), HINT_MS);
 }
 
@@ -528,7 +475,7 @@ function tap(i) {
     return;
   }
   run.open = run.open.filter((a) => a !== hit);
-  markWin(run.L, cells, run.puzzle, hit);
+  markWin(cells, run.puzzle, hit);
   if (run.open.length) { sfx.hit(1); return; } // Doppelzug: eine Lücke fehlt noch
 
   run.state = 'won';
@@ -543,21 +490,20 @@ function tap(i) {
 
 // Punkte: Grundwert + Tempobonus, mal Combo-Multiplikator, Blitz verdoppelt
 function scoreHit(t) {
-  const scoring = game.mode === 'endless' || game.mode === 'rush';
   run.streak++;
   run.bestStreak = Math.max(run.bestStreak, run.streak);
   const mult = multiplier();
   const blitz = t < BLITZ;
   sfx.hit(mult);
   if (blitz) sfx.blitz();
-  if (scoring) {
-    const ref = game.mode === 'endless' ? run.limit : 3;
+  if (scoring()) {
+    const ref = game.mode === 'chaos' ? run.limit : 3;
     let pts = (100 + Math.round(100 * Math.max(0, 1 - t / ref))) * mult;
     if (blitz) { pts *= 2; run.blitzes++; }
     run.score += pts;
     floatText(`+${pts}${blitz ? ' ⚡ Blitz!' : ''}`, blitz ? 'blitz' : 'good');
     if (mult > 1 && run.streak % 4 === 0) setTimeout(() => floatText(`Combo ×${mult}!`, 'combo'), 250);
-    if (game.mode === 'endless') run.moveTime = Math.max(ENDLESS.min, run.moveTime - ENDLESS.step);
+    if (game.mode === 'chaos') run.moveTime = Math.max(CHAOS.min, run.moveTime - CHAOS.step);
     if (game.mode === 'rush') rushAdjust(RUSH.hit);
     updateMid();
   } else if (blitz) {
@@ -568,7 +514,7 @@ function scoreHit(t) {
 
 function advance() {
   if (run.state === 'over') return;
-  if (levelMode() && run.round >= run.rounds) endRun('done');
+  if (game.mode === 'classic' && run.round >= ROUNDS) endRun('done');
   else nextRound();
 }
 
@@ -582,121 +528,44 @@ function stopRun() {
 
 function endRun(reason) {
   stopRun();
-  if (!levelMode()) return finishScoreMode(reason);
-  const pl = run.player;
-  const done = reason === 'done';
-  pl.levelTime = done ? run.time : null;
-  if (done) pl.total += run.time;
-  if (reason === 'out') pl.out = true;
-  afterRun(done, reason, run.time);
+  if (scoring()) return finishScoreMode(reason);
+  if (reason !== 'done' || game.level === LEVELS) {
+    if (reason === 'done') game.total += run.time;
+    return finishClassic(reason === 'done');
+  }
+  game.total += run.time;
+  $('#res-title').textContent = `Level ${game.level} geschafft!`;
+  $('#res-time').textContent = fmt(run.time);
+  $('#res-sub').textContent = `Gesamtzeit: ${fmt(game.total)} · Fehler: ${game.mistakes}/${MAX_MISTAKES}`;
+  game.level++;
+  nextAction = () => showReady();
+  showResult('Weiter');
 }
 
-// ---------- Nach dem Durchgang ----------
+// ---------- Ergebnisse ----------
 let nextAction = null;
 
-function afterRun(won, reason, time) {
-  const pl = run.player;
-  const title = $('#res-title');
-  const table = $('#res-table');
-  table.innerHTML = '';
-  title.style.color = '';
-
-  if (solo()) {
-    if (!won || game.level === LEVELS) return finishGame();
-    title.textContent = `Level ${game.level} geschafft!`;
-    $('#res-time').textContent = fmt(time);
-    $('#res-sub').textContent = `Gesamtzeit: ${fmt(pl.total)} · Fehler: ${pl.mistakes}/${MAX_MISTAKES}`;
-    game.level++;
-    nextAction = () => showReady();
-    show('screen-result');
-    return;
-  }
-
-  // Mehrspieler: nächster aktiver Spieler im selben Level?
-  const next = nextPlayerIndex(game.turn);
-  title.textContent = pl.out ? `${pl.name} ist raus!` : `${pl.name}: geschafft!`;
-  title.style.color = pl.color;
-  $('#res-time').textContent = won ? fmt(time) : '—';
-  $('#res-sub').textContent = `Fehler: ${pl.mistakes}/${MAX_MISTAKES}`;
-
-  if (next != null) {
-    game.turn = next;
-    nextAction = () => showReady();
-  } else {
-    // Level fertig: schnellster bekommt den Punkt
-    const finished = game.players.filter((p) => p.levelTime != null);
-    let winner = null;
-    if (finished.length) {
-      winner = finished.reduce((a, b) => (b.levelTime < a.levelTime ? b : a));
-      winner.points++;
-    }
-    $('#res-sub').textContent += winner ? ` · Levelsieg: ${winner.name} (${fmt(winner.levelTime)})` : ' · Niemand hat das Level geschafft';
-    renderTable(table, true);
-    const remaining = active();
-    if (game.level >= LEVELS || remaining.length <= 1) {
-      nextAction = () => finishGame();
-    } else {
-      game.level++;
-      game.players.forEach((p) => (p.levelTime = null));
-      game.turn = game.players.indexOf(remaining[0]);
-      nextAction = () => showReady();
-    }
-  }
+function showResult(nextLabel) {
+  $('#btn-next').textContent = nextLabel;
   show('screen-result');
 }
 
-function nextPlayerIndex(from) {
-  for (let i = from + 1; i < game.players.length; i++) if (!game.players[i].out) return i;
-  return null;
-}
+// Rekorde: Klassik = höchstes Level + Zeit, sonst Punkte
+const bestKey = (mode, diff) => mode === 'classic' ? `farbblitz.best.cross.${diff}` : `farbblitz.hs.${mode}.${diff}`;
 
-const rank = (a, b) => (a.out - b.out) || (b.points - a.points) || (a.total - b.total);
-
-function renderTable(el, withLevel) {
-  const sorted = [...game.players].sort(rank);
-  const lead = sorted[0];
-  el.innerHTML = '';
-  sorted.forEach((p) => {
-    const r = document.createElement('div');
-    r.className = 'row' + (p.out ? ' out' : '') + (p === lead && !p.out ? ' lead' : '');
-    const left = document.createElement('span');
-    left.textContent = p.name;
-    left.style.color = p.color;
-    const right = document.createElement('span');
-    right.textContent = `${p.points} Pkt` + (withLevel ? ` · ${fmt(p.levelTime)}` : '') + ` · ${'♥'.repeat(MAX_MISTAKES - p.mistakes)}`;
-    r.append(left, right);
-    el.appendChild(r);
-  });
-}
-
-const bestKey = () => `farbblitz.best.${game.mode === 'classic' ? '' : game.mode + '.'}${game.layout}.${game.diff}`;
-
-function finishGame() {
+function finishClassic(allDone) {
   const title = $('#res-title');
   title.style.color = '';
-  $('#res-table').innerHTML = '';
-
-  if (solo()) {
-    const pl = game.players[0];
-    const cleared = pl.out ? game.level - 1 : LEVELS;
-    title.textContent = cleared === LEVELS ? 'Alle 9 Level geschafft!' : 'Game Over';
-    $('#res-time').textContent = cleared === LEVELS ? fmt(pl.total) : `Level ${cleared}/${LEVELS}`;
-    const best = storeGet(bestKey(), null);
-    const better = !best || cleared > best.level || (cleared === best.level && pl.total < best.total);
-    if (better && cleared > 0) storeSet(bestKey(), { level: cleared, total: pl.total });
-    $('#res-sub').textContent = (better && cleared > 0 ? '🏆 Neue Bestleistung! ' : '') +
-      `Gesamtzeit ${fmt(pl.total)} · ${MODES[game.mode].name} · ${LAYOUTS[game.layout].name} · ${DIFF_NAMES[game.diff]}`;
-  } else {
-    const champ = [...game.players].sort(rank)[0];
-    title.textContent = `${champ.name} gewinnt!`;
-    title.style.color = champ.color;
-    $('#res-time').textContent = `${champ.points} Pkt`;
-    $('#res-sub').textContent = `Gespielt bis Level ${game.level} · ${MODES[game.mode].name} · ${DIFF_NAMES[game.diff]}`;
-    renderTable($('#res-table'), false);
-  }
+  const cleared = allDone ? LEVELS : game.level - 1;
+  title.textContent = allDone ? 'Alle 9 Level geschafft!' : 'Game Over';
+  $('#res-time').textContent = allDone ? fmt(game.total) : `Level ${cleared}/${LEVELS}`;
+  const key = bestKey('classic', game.diff);
+  const best = storeGet(key, null);
+  const better = cleared > 0 && (!best || cleared > best.level || (cleared === best.level && game.total < best.total));
+  if (better) storeSet(key, { level: cleared, total: game.total });
+  $('#res-sub').textContent = (better ? '🏆 Neue Bestleistung! ' : '') + `Gesamtzeit ${fmt(game.total)} · ${DIFF_NAMES[game.diff]}`;
   nextAction = null;
-  $('#btn-next').textContent = 'Nochmal';
-  show('screen-result');
+  showResult('Nochmal');
 }
 
 function finishScoreMode(reason) {
@@ -704,25 +573,22 @@ function finishScoreMode(reason) {
   title.style.color = '';
   title.textContent = reason === 'timeout' ? 'Zeit um!' : 'Game Over';
   $('#res-time').textContent = `${run.score} Pkt`;
-  const best = storeGet(bestKey(), null);
+  const key = bestKey(game.mode, game.diff);
+  const best = storeGet(key, null);
   const better = run.score > 0 && (!best || run.score > best.score);
-  if (better) storeSet(bestKey(), { score: run.score });
-  const extra = game.mode === 'endless' ? ` · Tempo am Ende ${run.moveTime.toFixed(2)} s` : '';
+  if (better) storeSet(key, { score: run.score });
+  const extra = game.mode === 'chaos' ? ` · Tempo am Ende ${run.moveTime.toFixed(2)} s` : '';
   $('#res-sub').textContent = (better ? '🏆 Neuer Highscore! ' : best ? `Highscore: ${best.score} · ` : '') +
     `${run.hits} Treffer · beste Combo ${run.bestStreak} · ${run.blitzes} Blitze${extra}`;
-  $('#res-table').innerHTML = '';
   nextAction = null;
-  $('#btn-next').textContent = 'Nochmal';
-  show('screen-result');
+  showResult('Nochmal');
 }
 
 // ---------- Duell: zwei Spieler gleichzeitig ----------
 let duel = null;
 
 function startDuel() {
-  const L = LAYOUTS[game.layout];
   duel = {
-    L,
     move: 0,
     state: 'idle',
     timers: [],
@@ -730,20 +596,12 @@ function startDuel() {
     sides: [0, 1].map((s) => {
       const root = $(`#duel-${s}`);
       const boardEl = root.querySelector('.board');
-      return {
-        root,
-        boardEl,
-        cells: buildBoard(boardEl, game.layout, (i) => duelTap(s, i)),
-        score: 0,
-        locked: false,
-        sabotaged: false,
-      };
+      const name = root.querySelector('.duel-name');
+      name.textContent = `Spieler ${s + 1}`;
+      name.style.color = PLAYER_COLORS[s];
+      return { root, boardEl, cells: buildBoard(boardEl, (i) => duelTap(s, i)), score: 0, locked: false, sabotaged: false };
     }),
   };
-  duel.sides.forEach((sd, s) => {
-    sd.root.querySelector('.duel-name').textContent = game.players[s].name;
-    sd.root.querySelector('.duel-name').style.color = game.players[s].color;
-  });
   renderDuel();
   show('screen-duel');
   nextDuelMove();
@@ -762,9 +620,8 @@ function duelStatus(s, text) { duel.sides[s].root.querySelector('.duel-status').
 
 function nextDuelMove() {
   duel.move++;
-  const level = Math.min(LEVELS, 1 + Math.floor((duel.move - 1) / 3));
-  const p = levelParams(level, game.diff, game.layout);
-  duel.puzzle = makePuzzle(duel.L, p);
+  const stage = Math.min(LEVELS, 1 + Math.floor((duel.move - 1) / 3));
+  duel.puzzle = makePuzzle(levelParams(stage, game.diff));
   duel.limit = DUEL.times[game.diff];
   duel.state = 'pop';
   renderDuel();
@@ -789,18 +646,25 @@ function nextDuelMove() {
   }, POP_MS);
 }
 
+function duelReveal(text) {
+  duel.state = 'hint';
+  cancelAnimationFrame(duel.raf);
+  duel.sides.forEach((sd, s) => {
+    revealAnswers(sd.cells, sd.boardEl, duel.puzzle, duel.puzzle.answers);
+    if (text) duelStatus(s, text);
+  });
+  duelLater(nextDuelMove, HINT_MS);
+}
+
 function duelLoop(now) {
   if (!duel || duel.state !== 'play') return;
-  const left = duel.limit - (now - duel.start) / 1000;
+  const frac = (duel.limit - (now - duel.start) / 1000) / duel.limit;
   const bar = $('#duel-bar i');
-  bar.style.width = Math.max(0, left / duel.limit) * 100 + '%';
-  bar.style.background = left / duel.limit > 0.5 ? 'var(--green)' : left / duel.limit > 0.25 ? 'var(--orange)' : 'var(--red)';
-  if (left <= 0) {
-    duel.state = 'hint';
+  bar.style.width = Math.max(0, frac) * 100 + '%';
+  bar.style.background = frac > 0.5 ? 'var(--green)' : frac > 0.25 ? 'var(--orange)' : 'var(--red)';
+  if (frac <= 0) {
     sfx.miss();
-    duel.sides.forEach((sd, s) => { revealAnswers(duel.L, sd.cells, sd.boardEl, duel.puzzle, duel.puzzle.answers); duelStatus(s, 'Zeit um!'); });
-    duelLater(nextDuelMove, HINT_MS);
-    return;
+    return duelReveal('Zeit um!');
   }
   duel.raf = requestAnimationFrame(duelLoop);
 }
@@ -817,12 +681,7 @@ function duelTap(s, i) {
     sd.boardEl.classList.add('locked');
     duelStatus(s, '✖ Gesperrt');
     sfx.miss();
-    if (duel.sides.every((x) => x.locked)) {
-      duel.state = 'hint';
-      cancelAnimationFrame(duel.raf);
-      duel.sides.forEach((x) => revealAnswers(duel.L, x.cells, x.boardEl, duel.puzzle, duel.puzzle.answers));
-      duelLater(nextDuelMove, HINT_MS);
-    }
+    if (duel.sides.every((x) => x.locked)) duelReveal();
     return;
   }
   duel.state = 'won';
@@ -830,11 +689,11 @@ function duelTap(s, i) {
   const t = (performance.now() - duel.start) / 1000;
   sd.score++;
   const other = duel.sides[1 - s];
-  markWin(duel.L, sd.cells, duel.puzzle, ans);
-  revealAnswers(duel.L, other.cells, other.boardEl, duel.puzzle, [ans]);
+  markWin(sd.cells, duel.puzzle, ans);
+  revealAnswers(other.cells, other.boardEl, duel.puzzle, [ans]);
   sfx.hit(1 + Math.floor(sd.score / 2));
   duelStatus(s, `✔ Punkt! ${t.toFixed(2)} s`);
-  duelStatus(1 - s, `${game.players[s].name} war schneller`);
+  duelStatus(1 - s, `Spieler ${s + 1} war schneller`);
   if (t < BLITZ) {
     // Blitz-Treffer sabotiert den Gegner im nächsten Zug
     other.sabotaged = true;
@@ -855,38 +714,24 @@ function stopDuel() {
 
 function finishDuel(s) {
   stopDuel();
-  const w = game.players[s];
   const title = $('#res-title');
-  title.textContent = `${w.name} gewinnt das Duell!`;
-  title.style.color = w.color;
+  title.textContent = `Spieler ${s + 1} gewinnt das Duell!`;
+  title.style.color = PLAYER_COLORS[s];
   $('#res-time').textContent = `${duel.sides[0].score} : ${duel.sides[1].score}`;
   $('#res-sub').textContent = `${duel.move} Züge · ${DIFF_NAMES[game.diff]}`;
-  $('#res-table').innerHTML = '';
   nextAction = null;
-  $('#btn-next').textContent = 'Revanche';
-  show('screen-result');
+  showResult('Revanche');
 }
 
 // ---------- Bereit-Bildschirm & Countdown ----------
 function showReady() {
   const m = game.mode;
-  const pl = game.players[game.turn];
-  $('#btn-next').textContent = 'Weiter';
-  $('#ready-player').style.color = '';
   const notes = [];
-  if (levelMode()) {
-    const p = levelParams(game.level, game.diff, game.layout);
-    $('#ready-level').textContent = `${MODES[m].name} · Level ${game.level} von ${LEVELS} · ${DIFF_NAMES[game.diff]}`;
-    $('#ready-player').textContent = solo() ? (isBonus() ? '⭐ Bonus-Level!' : 'Bereit?') : `${pl.name} ist dran`;
-    if (!solo()) $('#ready-player').style.color = pl.color;
-    if (isBonus()) notes.push(`${BONUS_ROUNDS} Züge ohne Zeitlimit`, 'Fehler kosten kein Leben, aber +2 s');
-    else notes.push(`${ROUNDS} Züge`, `${p.colors} Farben`, `${p.moveTime} s pro Zug`);
-    if (m === 'chaos') {
-      const unlocked = Object.values(SPECIALS).filter((x) => game.level >= x.from).map((x) => x.label);
-      if (unlocked.length) notes.push('Sonderzüge: ' + unlocked.join(', '));
-      if (game.level >= 4) notes.push('Achtung, Täuschungen!');
-    }
-    if (!solo()) notes.push('iPhone weitergeben!');
+  if (m === 'classic') {
+    const p = levelParams(game.level, game.diff);
+    $('#ready-level').textContent = `Klassik · Level ${game.level} von ${LEVELS} · ${DIFF_NAMES[game.diff]}`;
+    $('#ready-player').textContent = 'Bereit?';
+    notes.push(`${ROUNDS} Züge`, `${p.colors} Farben`, `${p.moveTime} s pro Zug`);
   } else if (m === 'duel') {
     $('#ready-level').textContent = `Duell · ${DIFF_NAMES[game.diff]}`;
     $('#ready-player').textContent = 'Legt das iPhone flach zwischen euch';
@@ -925,7 +770,7 @@ function bindSeg(id, key) {
     const b = e.target.closest('button');
     if (!b) return;
     seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
-    settings[key] = key === 'layout' || key === 'mode' ? b.dataset.v : Number(b.dataset.v);
+    settings[key] = key === 'mode' ? b.dataset.v : Number(b.dataset.v);
     storeSet('farbblitz.settings', settings);
     renderMenu();
   });
@@ -934,27 +779,28 @@ function bindSeg(id, key) {
 function renderMenu() {
   const m = MODES[settings.mode];
   $('#mode-desc').textContent = m.desc;
-  $('#group-players').style.display = m.multi ? '' : 'none';
-  const prefix = settings.mode === 'classic' ? '' : settings.mode + '.';
-  const best = storeGet(`farbblitz.best.${prefix}${settings.layout}.${settings.diff}`, null);
-  const where = `${m.name}, ${LAYOUTS[settings.layout].name}, ${DIFF_NAMES[settings.diff]}`;
+  const best = settings.mode === 'duel' ? null : storeGet(bestKey(settings.mode, settings.diff), null);
+  const where = `${m.name}, ${DIFF_NAMES[settings.diff]}`;
   $('#best').textContent = !best ? ''
     : best.score != null ? `Highscore (${where}): ${best.score} Pkt`
-    : `Solo-Rekord (${where}): Level ${best.level}/${LEVELS} · ${fmt(best.total)}`;
+    : `Rekord (${where}): Level ${best.level}/${LEVELS} · ${fmt(best.total)}`;
 }
 
 function restoreSettings() {
-  Object.assign(settings, storeGet('farbblitz.settings', {}));
-  if (!LAYOUTS[settings.layout]) settings.layout = 'cross';
-  if (!MODES[settings.mode]) settings.mode = 'classic';
-  [['#seg-players', 'players'], ['#seg-diff', 'diff'], ['#seg-layout', 'layout'], ['#seg-mode', 'mode']].forEach(([id, key]) => {
+  // Alte Zeitjagd-Highscores (vor dem Aufräumen) übernehmen
+  [0, 1, 2].forEach((d) => {
+    const old = storeGet(`farbblitz.best.rush.cross.${d}`, null);
+    if (old && !storeGet(bestKey('rush', d), null)) storeSet(bestKey('rush', d), old);
+  });
+  const saved = storeGet('farbblitz.settings', {});
+  if (MODES[saved.mode]) settings.mode = saved.mode;
+  if ([0, 1, 2].includes(saved.diff)) settings.diff = saved.diff;
+  [['#seg-diff', 'diff'], ['#seg-mode', 'mode']].forEach(([id, key]) => {
     $(id).querySelectorAll('button').forEach((b) => b.classList.toggle('on', String(b.dataset.v) === String(settings[key])));
   });
 }
 
-bindSeg('#seg-players', 'players');
 bindSeg('#seg-diff', 'diff');
-bindSeg('#seg-layout', 'layout');
 bindSeg('#seg-mode', 'mode');
 restoreSettings();
 renderMenu();
@@ -974,7 +820,7 @@ document.querySelectorAll('[data-quit]').forEach((b) => b.addEventListener('clic
   show('screen-menu');
 }));
 
-// Doppeltipp-Zoom & Scrollen auf iOS unterbinden
+// Doppeltipp-Zoom & Scrollen auf iOS unterbinden (außer im Menü und in der Anleitung)
 document.addEventListener('touchmove', (e) => { if (!e.target.closest('.howto-scroll, #screen-menu')) e.preventDefault(); }, { passive: false });
 document.addEventListener('dblclick', (e) => e.preventDefault());
 

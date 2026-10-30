@@ -27,21 +27,10 @@
         <div class="seg seg-wrap" id="seg-mode">
           <button data-v="classic" class="on">Klassik</button>
           <button data-v="chaos">Chaos</button>
-          <button data-v="endless">Endlos</button>
           <button data-v="rush">Zeitjagd</button>
           <button data-v="duel">Duell</button>
         </div>
         <div class="mode-desc" id="mode-desc"></div>
-      </div>
-
-      <div class="group" id="group-players">
-        <div class="label">Spieler</div>
-        <div class="seg" id="seg-players">
-          <button data-v="1" class="on">Solo</button>
-          <button data-v="2">2</button>
-          <button data-v="3">3</button>
-          <button data-v="4">4</button>
-        </div>
       </div>
 
       <div class="group">
@@ -50,14 +39,6 @@
           <button data-v="0" class="on">Leicht</button>
           <button data-v="1">Mittel</button>
           <button data-v="2">Schwer</button>
-        </div>
-      </div>
-
-      <div class="group">
-        <div class="label">Spielfeld</div>
-        <div class="seg" id="seg-layout">
-          <button data-v="cross" class="on">Gitter (13)</button>
-          <button data-v="grid">3×3</button>
         </div>
       </div>
 
@@ -77,10 +58,9 @@
       </ol>
       <h3>Modi</h3>
       <ul class="howto">
-        <li><b>Klassik:</b> 9 Level à 10 Züge, 3 s pro Zug (Schwer: 2 s), 3 Fehler = raus. Bis 4 Spieler reihum.</li>
-        <li><b>Chaos:</b> Wie Klassik plus Sonderzüge – 🌈 Joker (zählt als jede Farbe), ✌️ Doppelzug (zwei Lücken), 🌀 Dreher (Feld dreht sich), 🌑 Blackout (Farben verschwinden nach 1 s). Ab Level 4 Täuschungen. Level 3 und 6 sind Bonus-Level: 20 Züge ohne Zeitlimit.</li>
-        <li><b>Endlos:</b> Start mit 4 s pro Zug, jeder Treffer macht es schneller. Punkte für Tempo, Combo-Multiplikator bis ×5, Blitz-Treffer (unter 1 s) zählen doppelt. 3 Leben.</li>
-        <li><b>Zeitjagd:</b> 30 s auf der Uhr. Treffer +1,5 s, Fehler −2 s. Punkte wie bei Endlos.</li>
+        <li><b>Klassik:</b> 9 Level à 10 Züge, 3 s pro Zug (Schwer: 2 s), 3 Fehler = raus.</li>
+        <li><b>Chaos:</b> Endlos – Start mit 4 s pro Zug, jeder Treffer macht es schneller. Punkte für Tempo, Combo-Multiplikator bis ×5, Blitz-Treffer (unter 1 s) zählen doppelt. Je weiter du kommst, desto mehr Sonderzüge: 🌈 Joker (zählt als jede Farbe), ✌️ Doppelzug (zwei Lücken), 🌀 Dreher (Feld dreht sich), 🌑 Blackout (Farben verschwinden nach 1 s) – und Täuschungen. 3 Leben.</li>
+        <li><b>Zeitjagd:</b> 30 s auf der Uhr. Treffer +1,5 s, Fehler −2 s. Punkte wie bei Chaos.</li>
         <li><b>Duell:</b> Zwei Spieler gleichzeitig, iPhone flach zwischen euch. Wer zuerst richtig tippt, punktet; wer falsch tippt, ist für den Zug gesperrt. Ein Blitz-Treffer sabotiert den Gegner: Sein Feld bleibt im nächsten Zug 1 s verdeckt. Wer zuerst 7 hat, gewinnt.</li>
       </ul>
       </div>
@@ -101,7 +81,6 @@
       <header class="hud">
         <div class="hud-l">
           <div class="hud-small" id="hud-level">Level 1</div>
-          <div class="hud-small" id="hud-player"></div>
         </div>
         <div class="target-wrap">
           <div class="hud-small" id="hud-mid-label">Zug</div>
@@ -145,7 +124,6 @@
       <h2 id="res-title"></h2>
       <div class="res-big" id="res-time"></div>
       <div class="res-sub" id="res-sub"></div>
-      <div class="table" id="res-table"></div>
       <button class="big primary" id="btn-next">Weiter</button>
       <button class="big ghost" id="btn-menu">Menü</button>
     </section>
