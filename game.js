@@ -518,5 +518,19 @@ document.addEventListener('dblclick', (e) => e.preventDefault());
 
 // Offline-Unterstützung
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        // Beim Zurückkehren in die App nach Updates schauen
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update(); });
+      })
+      .catch(() => {});
+  });
+  // Neue Version übernommen → einmal neu laden (nicht mitten im Spiel)
+  let reloaded = !navigator.serviceWorker.controller; // erster Besuch: nichts neu laden
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded || (run && run.state !== 'over')) return;
+    reloaded = true;
+    location.reload();
+  });
 }
